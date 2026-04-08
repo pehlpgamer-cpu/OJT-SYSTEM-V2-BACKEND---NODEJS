@@ -126,9 +126,7 @@ export const defineAuditLog = (sequelize) => {
         {
           fields: ['severity'],
         },
-        {
-          fields: ['createdAt'], // For time-based queries
-        },
+        // Note: createdAt index removed - Sequelize handles timestamps differently in SQLite
         {
           fields: ['user_id', 'action', 'entity_type'],
         },
@@ -262,9 +260,7 @@ export const defineNotification = (sequelize) => {
         {
           fields: ['priority'],
         },
-        {
-          fields: ['createdAt'],
-        },
+        // Note: createdAt index removed - Sequelize handles timestamps automatically
         {
           fields: ['user_id', 'is_read'], // Get unread notifications for user
         },
@@ -391,9 +387,7 @@ export const defineMessage = (sequelize) => {
         {
           fields: ['is_read'],
         },
-        {
-          fields: ['createdAt'],
-        },
+        // Note: createdAt index removed - Sequelize handles timestamps automatically
         {
           fields: ['sender_id', 'recipient_id'], // Get conversation thread
         },

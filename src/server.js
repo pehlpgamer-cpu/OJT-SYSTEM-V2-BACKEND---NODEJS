@@ -41,13 +41,14 @@ async function initializeApp() {
   // Validate environment variables first
   validateConfig();
 
-  // Connect to database
-  await connectDatabase();
-  console.log('✅ Database connected and synced');
-
-  // Initialize all models
+  // Initialize all models BEFORE connecting to database
+  // WHY: Models must be defined before sync() is called
   const models = initializeModels(sequelize);
   console.log('✅ Models initialized');
+
+  // Connect to database and sync models
+  await connectDatabase();
+  console.log('✅ Database connected and synced');
 
   // Create Express app
   const app = express();
@@ -443,9 +444,10 @@ async function startServer() {
   }
 }
 
+// Export functions for testing and programmatic use
+export { initializeApp, startServer };
+
 // Start server if this is the main module
 if (import.meta.url === `file://${process.argv[1]}`) {
   startServer();
 }
-
-export { initializeApp, startServer };

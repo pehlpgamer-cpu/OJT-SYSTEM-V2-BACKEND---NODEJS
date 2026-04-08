@@ -27,17 +27,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 3. Consistent configuration across application
  */
 const sequelize = new Sequelize({
-  // Use SQLite for lightweight, file-based database
+  // Use in-memory SQLite for tests, file-based for development/production
   dialect: 'sqlite',
   
-  // Path to database file - will be created if it doesn't exist
-  storage: path.join(__dirname, '../../database', config.database.path.split('/').pop()),
+  // Path to database file - use :memory: for tests
+  storage: process.env.NODE_ENV === 'test' ? ':memory:' : path.join(__dirname, '../../database', config.database.path.split('/').pop()),
   
   /**
    * WHY logging: In development, logging SQL queries helps debug issues.
    * In production, disable logging to reduce overhead.
    */
-  logging: config.app.debug ? console.log : false,
+  logging: config.app.debug && process.env.NODE_ENV !== 'test' ? console.log : false,
   
   /**
    * WHY timestamps: Automatically adds createdAt/updatedAt to all models.
@@ -69,18 +69,26 @@ export async function connectDatabase() {
     console.log('✅ Database connection authenticated successfully');
 
     // Sync all models with database
-    // WHY alter: In development, automatically update schema when models change
-    // In production, use migrations instead (more controlled)
+    // WHY force and alter settings:
+    // - Test: force=true (recreate all), alter=false (don't try to migrate)
+    // - Debug/Dev: force=false, alter=true (safe schema updates)
+    // - Prod: force=false, alter=false (use migrations)
+    const isTest = process.env.NODE_ENV === 'test';
+    const isDebug = config.app.debug && !isTest;
+    
     await sequelize.sync({ 
-      alter: config.app.debug,
-      force: false 
+      alter: isDebug,      // Allow schema changes in development
+      force: isTest        // Recreate all tables for each test
     });
     console.log('✅ Database models synchronized');
 
     return sequelize;
   } catch (error) {
     console.error('❌ Database connection error:', error.message);
-    process.exit(1); // Fail fast - application cannot run without database
+    if (config.app.debug) {
+      console.error('Stack:', error.stack);
+    }
+    throw error; // Re-throw so test knows it failed
   }
 }
 
