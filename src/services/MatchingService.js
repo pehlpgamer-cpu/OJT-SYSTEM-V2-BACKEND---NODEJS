@@ -14,7 +14,7 @@
  * WHAT: Calculates compatibility scores and generates recommendations.
  */
 
-import { Logger } from '../utils/errorHandler.js';
+import { Logger, AppError } from '../utils/errorHandler.js';
 
 export class MatchingService {
   constructor(models) {
@@ -36,7 +36,7 @@ export class MatchingService {
     });
 
     if (!student) {
-      throw new Error('Student not found');
+      throw new AppError('Student not found', 404, { studentId });
     }
 
     // Get all active job postings

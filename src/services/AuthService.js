@@ -124,7 +124,32 @@ export class AuthService {
       throw new AppError('Invalid email or password', 401);
     }
 
-    // Check if account is active
+    // NEW: Check if account is locked due to failed login attempts
+    if (user.status === 'locked') {
+      const lockDurationMinutes = 30;
+      const timeSinceLockMs = Date.now() - new Date(user.lockedUntil).getTime();
+      const timeSinceLockMinutes = timeSinceLockMs / (1000 * 60);
+
+      if (timeSinceLockMinutes < lockDurationMinutes) {
+        const remainingMinutes = Math.ceil(lockDurationMinutes - timeSinceLockMinutes);
+        Logger.warn('Login attempt on locked account', {
+          email,
+          remainingLockMinutes: remainingMinutes,
+        });
+        throw new AppError(
+          `Account is temporarily locked. Try again in ${remainingMinutes} minutes`,
+          423 // Locked status code
+        );
+      } else {
+        // Lock period has expired, unlock the account
+        await user.update({
+          status: 'active',
+          failedLoginAttempts: 0,
+        });
+      }
+    }
+
+    // Check if account is active (after lock check)
     if (user.status !== 'active') {
       if (user.status === 'pending') {
         throw new AppError('Account is pending approval. Please contact administrator', 403);
@@ -139,11 +164,48 @@ export class AuthService {
     // WHY bcrypt.compare: Secure comparison - brute-forcing the hash won't work
     const passwordMatches = await user.comparePassword(password);
     if (!passwordMatches) {
-      Logger.warn('Failed login attempt', {
-        email,
-        reason: 'incorrect_password',
-      });
+      // NEW: Track failed login attempts
+      const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
+      const maxFailedAttempts = 5;
+
+      if (newFailedAttempts >= maxFailedAttempts) {
+        // Lock account after 5 failed attempts
+        await user.update({
+          status: 'locked',
+          lockedUntil: new Date(),
+          failedLoginAttempts: newFailedAttempts,
+        });
+
+        Logger.warn('Account locked due to failed login attempts', {
+          email,
+          attempts: newFailedAttempts,
+        });
+
+        throw new AppError(
+          'Account locked due to too many failed login attempts. Try again in 30 minutes',
+          423
+        );
+      } else {
+        // Increment attempts
+        await user.update({
+          failedLoginAttempts: newFailedAttempts,
+        });
+
+        Logger.warn('Failed login attempt', {
+          email,
+          attempts: newFailedAttempts,
+          maxAttempts: maxFailedAttempts,
+        });
+      }
+
       throw new AppError('Invalid email or password', 401);
+    }
+
+    // NEW: Reset failed attempts on successful login
+    if (user.failedLoginAttempts > 0) {
+      await user.update({
+        failedLoginAttempts: 0,
+      });
     }
 
     // Update last login timestamp for security monitoring
@@ -216,6 +278,15 @@ export class AuthService {
       expiresIn: '1h',
     });
 
+    // NEW: Store token in database for tracking and preventing reuse
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    await this.models.PasswordResetToken.create({
+      userId: user.id,
+      token: resetToken,
+      expiresAt,
+      used: false,
+    });
+
     Logger.info('Password reset requested', {
       userId: user.id,
       email: user.email,
@@ -240,8 +311,30 @@ export class AuthService {
    */
   async resetPassword(resetToken, newPassword) {
     try {
-      // Verify reset token
+      // Verify reset token signature
       const decoded = jwt.verify(resetToken, config.auth.secret);
+
+      // NEW: Check if token has already been used (prevent reuse)
+      const tokenRecord = await this.models.PasswordResetToken.findOne({
+        where: { token: resetToken },
+      });
+
+      if (!tokenRecord) {
+        throw new AppError('Invalid reset token', 401);
+      }
+
+      if (tokenRecord.used) {
+        Logger.warn('Attempted password reset token reuse', {
+          userId: decoded.userId,
+          usedAt: tokenRecord.usedAt,
+        });
+        throw new AppError('This reset link has already been used', 401);
+      }
+
+      // Check if token has expired
+      if (new Date() > tokenRecord.expiresAt) {
+        throw new AppError('Reset token has expired', 401);
+      }
 
       // Find user
       const user = await this.models.User.findByPk(decoded.userId);
@@ -251,6 +344,11 @@ export class AuthService {
 
       // Update password (will be hashed by beforeUpdate hook)
       await user.update({ password: newPassword });
+
+      // NEW: Mark token as used to prevent reuse
+      tokenRecord.used = true;
+      tokenRecord.usedAt = new Date();
+      await tokenRecord.save();
 
       Logger.info('Password reset successfully', { userId: user.id });
 
@@ -264,6 +362,7 @@ export class AuthService {
       if (error instanceof AppError) {
         throw error;
       }
+      Logger.error('Password reset failed', error, { token: resetToken?.substring(0, 20) });
       throw new AppError('Invalid reset token', 401);
     }
   }

@@ -275,6 +275,8 @@ export function initializeModels(sequelize) {
     AuditLog,
     Notification,
     Message,
+    PasswordResetToken: PasswordResetTokenModel,
+    sequelize,
   };
 }
 

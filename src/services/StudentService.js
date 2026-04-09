@@ -207,57 +207,69 @@ export class StudentService {
    * @returns {Object} Created application
    */
   async applyToPosting(userId, postingId, data) {
-    const student = await this.models.Student.findOne({
-      where: { user_id: userId },
-    });
+    // Use transaction to prevent race conditions
+    return await this.models.sequelize.transaction(async (transaction) => {
+      const student = await this.models.Student.findOne({
+        where: { user_id: userId },
+        transaction,
+      });
 
-    if (!student) {
-      throw new AppError('Student profile not found', 404);
-    }
+      if (!student) {
+        throw new AppError('Student profile not found', 404);
+      }
 
-    // Check if posting exists and is active
-    const posting = await this.models.OjtPosting.findByPk(postingId);
-    if (!posting || posting.posting_status !== 'active') {
-      throw new AppError('Job posting not found or not active', 404);
-    }
+      // Lock posting row for update to prevent race condition
+      const posting = await this.models.OjtPosting.findByPk(postingId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE, // Acquires row lock
+      });
 
-    // Check if student already applied
-    const existingApp = await this.models.Application.findOne({
-      where: {
+      if (!posting || posting.posting_status !== 'active') {
+        throw new AppError('Job posting not found or not active', 404);
+      }
+
+      // Check if student already applied (within same transaction)
+      const existingApp = await this.models.Application.findOne({
+        where: {
+          student_id: student.id,
+          posting_id: postingId,
+        },
+        transaction,
+      });
+
+      if (existingApp) {
+        throw new AppError('You have already applied to this posting', 409);
+      }
+
+      // Check if positions available (within same transaction with lock)
+      // WHY: This check is now atomic due to row lock - no race condition
+      if (!posting.hasPositionsAvailable()) {
+        throw new AppError('All positions for this posting have been filled', 409);
+      }
+
+      // Create application (within same transaction)
+      const application = await this.models.Application.create({
         student_id: student.id,
         posting_id: postingId,
-      },
+        cover_letter: data.cover_letter,
+        resume_id: data.resume_id,
+        application_status: 'submitted',
+        applied_at: new Date(),
+      }, { transaction });
+
+      // Increment posting application count (within same transaction)
+      await posting.incrementApplicationCount();
+
+      Logger.info('Application submitted', {
+        userId,
+        postingId,
+        applicationId: application.id,
+      });
+
+      return application;
+      // Transaction automatically commits on successful return
+      // or rolls back if any error is thrown
     });
-
-    if (existingApp) {
-      throw new AppError('You have already applied to this posting', 409);
-    }
-
-    // Check if positions available
-    if (!posting.hasPositionsAvailable()) {
-      throw new AppError('All positions for this posting have been filled', 409);
-    }
-
-    // Create application
-    const application = await this.models.Application.create({
-      student_id: student.id,
-      posting_id: postingId,
-      cover_letter: data.cover_letter,
-      resume_id: data.resume_id,
-      application_status: 'submitted',
-      applied_at: new Date(),
-    });
-
-    // Increment posting application count
-    await posting.incrementApplicationCount();
-
-    Logger.info('Application submitted', {
-      userId,
-      postingId,
-      applicationId: application.id,
-    });
-
-    return application;
   }
 
   /**

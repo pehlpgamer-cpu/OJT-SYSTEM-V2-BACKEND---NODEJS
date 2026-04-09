@@ -97,6 +97,20 @@ export const defineUser = (sequelize) => {
         allowNull: true,
         comment: 'Token for persistent sessions',
       },
+
+      // NEW: Failed Login Tracking
+      failedLoginAttempts: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        comment: 'Count of failed login attempts (reset on success or after 30 min unlock)',
+      },
+
+      // NEW: Account Lock Time
+      lockedUntil: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Timestamp when account was locked - used to check if lock period has expired',
+      },
     },
     {
       // WHY indexes: Improve query performance, especially for login (email lookup)
