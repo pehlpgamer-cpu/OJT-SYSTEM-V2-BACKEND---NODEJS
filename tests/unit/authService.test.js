@@ -360,7 +360,7 @@ describe('AuthService', () => {
        */
       authService.forgotPassword.mockResolvedValue({
         message: 'Reset link sent to email',
-        resetToken: 'reset-token-123',
+        resetToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0ZmQ2NTM1Ny0yZmRmLTRjMjEtODc3Yy0xNjM3ZjAwODczMzEiLCJpYXQiOjE3MTY0MjkwMDAsImV4cCI6MTcxNjQzMjYwMH0.test',
       });
 
       const result = await authService.forgotPassword('test@test.com');
