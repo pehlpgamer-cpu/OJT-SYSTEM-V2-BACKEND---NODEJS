@@ -1,10 +1,12 @@
 # OJT System V2 - API Reference Guide
 
 **Version:** 2.0  
+**Framework:** Node.js 18+ with Express.js 4.18+  
 **API Standard:** RESTful with JSON  
-**Authentication:** Bearer Token (Laravel Sanctum)  
-**Base URL:** `http://localhost:8000/api`  
-**Content-Type:** `application/json`
+**Authentication:** Bearer Token (JWT 9.0+)  
+**Base URL:** `http://localhost:3000/api`  
+**Content-Type:** `application/json`  
+**ORM:** Sequelize 6.35+ (SQLite3/PostgreSQL)
 
 ---
 
