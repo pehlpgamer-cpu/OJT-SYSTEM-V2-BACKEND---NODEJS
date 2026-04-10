@@ -49,8 +49,8 @@ export const defineUser = (sequelize) => {
       // Authentication
       password: {
         type: DataTypes.STRING(255),
-        allowNull: false,
-        comment: 'Bcrypt hashed password - never store plaintext',
+        allowNull: true, // Allow null for Google OAuth users
+        comment: 'Bcrypt hashed password - null for Google OAuth users',
       },
 
       // Role Assignment
@@ -111,12 +111,45 @@ export const defineUser = (sequelize) => {
         allowNull: true,
         comment: 'Timestamp when account was locked - used to check if lock period has expired',
       },
+
+      // NEW: Google OAuth Provider ID
+      // WHY: Store Google's unique ID for OAuth linking and verification
+      google_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        unique: true,
+        comment: 'Google OAuth unique identifier - allows account linking',
+      },
+
+      // NEW: Authentication Provider Tracking
+      // WHY: Track which auth method user used (email, google) for security audit
+      auth_provider: {
+        type: DataTypes.ENUM('email', 'google'),
+        allowNull: false,
+        defaultValue: 'email',
+        validate: {
+          isIn: [['email', 'google']],
+        },
+        comment: 'Primary authentication provider - email or google',
+      },
+
+      // NEW: Google Account Link Status
+      // WHY: Track if user confirmed linking existing account to Google
+      google_linked_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: 'Timestamp when Google account was linked to this user',
+      },
     },
     {
       // WHY indexes: Improve query performance, especially for login (email lookup)
       indexes: [
         {
           fields: ['email'], // Email lookup during login happens frequently
+          unique: true,
+        },
+        {
+          fields: ['google_id'], // Google OAuth lookup
           unique: true,
         },
         {
@@ -211,6 +244,15 @@ export const defineUser = (sequelize) => {
    */
   User.findByEmail = async function(email) {
     return await this.findOne({ where: { email: email.toLowerCase() } });
+  };
+
+  /**
+   * Class method: Find user by Google ID
+   * 
+   * WHY: Google OAuth needs fast lookup by Google's unique identifier
+   */
+  User.findByGoogleId = async function(googleId) {
+    return await this.findOne({ where: { google_id: googleId } });
   };
 
   return User;

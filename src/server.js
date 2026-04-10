@@ -14,6 +14,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import session from 'express-session';
+import passport from 'passport';
 import sequelize from './config/database.js';
 import { connectDatabase } from './config/database.js';
 import { config, validateConfig } from './config/env.js';
@@ -21,16 +23,17 @@ import { errorHandler, wrap, Logger, AppError } from './utils/errorHandler.js';
 import { initializeModels } from './models/index.js';
 import { authMiddleware, rbacMiddleware, createRateLimiters } from './middleware/auth.js';
 import { handleValidationErrors } from './middleware/validation.js';
+import { initializePassport } from './config/passport.js';
 
 // Import services
 import AuthService from './services/AuthService.js';
 import StudentService from './services/StudentService.js';
 import MatchingService from './services/MatchingService.js';
+import GoogleAuthService from './services/GoogleAuthService.js';
 import { NotificationService, AuditService } from './services/NotificationService.js';
 
-// Import routes (will create next)
-// import authRoutes from './routes/auth.js';
-// import studentRoutes from './routes/student.js';
+// Import routes
+import createGoogleAuthRoutes from './routes/googleAuth.js';
 
 /**
  * Initialize Express application
@@ -52,6 +55,9 @@ async function initializeApp() {
 
   // Create Express app
   const app = express();
+
+  // Store models in app for access in routes
+  app.set('models', models);
 
   /**
    * Security Middleware
@@ -79,6 +85,31 @@ async function initializeApp() {
    */
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+  /**
+   * Session Middleware (Required for OAuth)
+   * 
+   * WHY: Passport uses sessions for OAuth flow state management
+   */
+  app.use(session({
+    secret: config.auth.secret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: config.app.env === 'production', // HTTPS only in production
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+  }));
+
+  /**
+   * Initialize Passport and Sessions
+   * 
+   * WHY: Set up Google OAuth strategy
+   */
+  initializePassport(models);
+  app.use(passport.initialize());
+  app.use(passport.session());
 
   /**
    * Initialize Rate Limiters
@@ -162,6 +193,15 @@ async function initializeApp() {
       });
     })
   );
+
+  /**
+   * Google OAuth Routes
+   * 
+   * WHY: Separate routes for Google OAuth instead of cluttering main auth
+   */
+  const googleAuthService = new GoogleAuthService(models);
+  const googleAuthRoutes = createGoogleAuthRoutes(googleAuthService);
+  app.use('/api/auth', googleAuthRoutes);
 
   /**
    * Protected Routes Middleware
