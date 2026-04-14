@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "buildCommand": "npm install",
+  "outputDirectory": "./",
   "functions": {
     "api/index.js": {
       "memory": 1024,
@@ -9,11 +11,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "api/index.js"
+      "dest": "/api/index.js"
     }
-  ],
-  "buildCommand": "npm install",
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
