@@ -41,63 +41,71 @@ import createGoogleAuthRoutes from './routes/googleAuth.js';
  * WHY: Single function to set up all app configuration
  */
 async function initializeApp() {
-  // Validate environment variables first
-  validateConfig();
+  try {
+    console.log('🚀 [initializeApp] Starting application initialization...');
+    
+    // Validate environment variables first
+    console.log('📝 [initializeApp] Validating environment configuration...');
+    validateConfig();
 
-  // Initialize all models BEFORE connecting to database
-  // WHY: Models must be defined before sync() is called
-  const models = initializeModels(sequelize);
-  console.log('✅ Models initialized');
+    // Initialize all models BEFORE connecting to database
+    // WHY: Models must be defined before sync() is called
+    console.log('📝 [initializeApp] Initializing models...');
+    const models = initializeModels(sequelize);
+    console.log('✅ Models initialized');
 
-  // Connect to database and sync models
-  await connectDatabase();
-  console.log('✅ Database connected and synced');
+    // Connect to database and sync models
+    console.log('📝 [initializeApp] Connecting to database...');
+    await connectDatabase();
+    console.log('✅ Database connected and synced');
 
-  // Create Express app
-  const app = express();
+    // Create Express app
+    console.log('📝 [initializeApp] Creating Express app instance...');
+    const app = express();
 
-  // Store models in app for access in routes
-  app.set('models', models);
+    // Store models in app for access in routes
+    app.set('models', models);
 
-  /**
-   * Security Middleware
-   * 
-   * WHY: Helmet adds security headers, cors handles cross-origin requests
-   */
-  app.use(helmet());
-  app.use(cors(config.cors));
+    /**
+     * Security Middleware
+     * 
+     * WHY: Helmet adds security headers, cors handles cross-origin requests
+     */
+    app.use(helmet());
+    app.use(cors(config.cors));
 
-  /**
-   * Request Logging
-   * 
-   * WHY: Track all requests for debugging and monitoring
-   */
-  app.use(morgan('combined', {
-    stream: {
-      write: (message) => Logger.info('HTTP Request', { message: message.trim() }),
-    },
-  }));
+    /**
+     * Request Logging
+     * 
+     * WHY: Track all requests for debugging and monitoring
+     */
+    app.use(morgan('combined', {
+      stream: {
+        write: (message) => Logger.info('HTTP Request', { message: message.trim() }),
+      },
+    }));
 
-  /**
-   * Body Parsing Middleware
-   * 
-   * WHY: Parse JSON request bodies
-   */
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
+    /**
+     * Body Parsing Middleware
+     * 
+     * WHY: Parse JSON request bodies
+     */
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-  /**
-   * Session Middleware (Required for OAuth)
-   * 
-   * WHY: Passport uses sessions for OAuth flow state management
-   */
-  app.use(session({
-    secret: config.auth.secret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: config.app.env === 'production', // HTTPS only in production
-      httpOnly: true,
+    /**
+     * Session Middleware (Required for OAuth)
+     * 
+     * WHY: Passport uses sessions for OAuth flow state management
+     */
+    console.log('📝 [initializeApp] Setting up session middleware...');
+    app.use(session({
+      secret: config.auth.secret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: config.app.env === 'production', // HTTPS only in production
+        httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   }));
@@ -429,7 +437,14 @@ async function initializeApp() {
    */
   app.use(errorHandler);
 
+  console.log('✅ [initializeApp] Application initialized successfully');
   return app;
+  } catch (error) {
+    console.error('❌ [initializeApp] Fatal error during initialization:');
+    console.error('❌ [initializeApp] Error message:', error.message);
+    console.error('❌ [initializeApp] Error stack:', error.stack);
+    throw error;
+  }
 }
 
 /**
