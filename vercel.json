@@ -2,7 +2,6 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "runtime": "nodejs18.x",
       "memory": 1024,
       "maxDuration": 60
     }
@@ -13,6 +12,7 @@
       "dest": "api/index.js"
     }
   ],
+  "buildCommand": "npm install",
   "env": {
     "NODE_ENV": "production"
   }
