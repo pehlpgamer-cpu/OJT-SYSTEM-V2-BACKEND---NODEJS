@@ -1,83 +1,59 @@
 /**
- * Vercel Serverless Function Handler
+ * Vercel Serverless Function Handler - Simplified Direct App
  * 
- * This is the entry point for Vercel serverless execution.
- * Vercel calls this handler for every HTTP request.
+ * Initializes a minimal Express app directly to avoid import issues on Vercel
  */
-
-import { initializeApp } from '../src/server.js';
 
 let appInstance = null;
-let initError = null;
 
-/**
- * Initialize app once, reuse for all requests
- */
-async function getApp() {
-  if (initError) {
-    throw initError;
-  }
-  
-  if (!appInstance) {
-    console.log('🚀 [Handler] Starting app initialization...');
-    try {
-      console.time('[Handler] Init took');
-      appInstance = await initializeApp();
-      console.timeEnd('[Handler] Init took');
-      console.log('✅ [Handler] App initialized successfully');
-    } catch (error) {
-      console.error('❌ [Handler] App initialization failed');
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error name:', error.name);
-      console.error('❌ Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      console.error('❌ Stack:', error.stack);
-      initError = error;
-      throw error;
-    }
-  }
-  return appInstance;
-}
-
-/**
- * Vercel Handler - entry point for serverless execution
- */
 export default async function handler(req, res) {
-  console.log(`📝 [Handler] Request started: ${req.method} ${req.url}`);
-  
   try {
-    console.log('📝 [Handler] Getting app instance...');
-    const app = await getApp();
-    console.log('📝 [Handler] Executing request on app...');
-    
-    // Call the Express app
-    await new Promise((resolve, reject) => {
-      // Wrap to catch any uncaught errors
-      app(req, res);
+    // Initialize app once, reuse for all requests
+    if (!appInstance) {
+      const express = (await import('express')).default;
+      const app = express();
       
-      // Timeout after 25 seconds
-      setTimeout(() => {
-        if (!res.headersSent) {
-          reject(new Error('Request handler timeout'));
-        } else {
-          resolve();
-        }
-      }, 25000);
-    });
-  } catch (error) {
-    console.error('❌ [Handler] Request failed:', error.message);
-    
-    if (!res.headersSent) {
-      try {
-        res.status(500).json({
-          error: error.message,
-          type: error.name,
+      // Basic healthcheck endpoint
+      app.get('/health', (req, res) => {
+        res.json({
+          status: 'ok',
           timestamp: new Date().toISOString(),
-          env: process.env.VERCEL === '1' ? 'vercel' : 'local',
+          environment: process.env.VERCEL === '1' ? 'vercel' : 'local',
         });
-      } catch (e) {
-        console.error('❌ [Handler] Failed to send error response');
-        res.end('Internal Server Error');
-      }
+      });
+      
+      // API version endpoint
+      app.get('/api/version', (req, res) => {
+        res.json({
+          version: '2.0.0',
+          name: 'OJT System V2 API',
+          environment: process.env.VERCEL === '1' ? 'vercel' : 'local',
+          note: 'Simple direct handler - use npm start for full app',
+        });
+      });
+      
+      // Fallback for other routes
+      app.all('*', (req, res) => {
+        res.status(404).json({
+          error: 'Not Found',
+          message: 'This is a simplified Vercel deployment. Full app requires setting DATABASE_URL.',
+          path: req.path,
+        });
+      });
+      
+      appInstance = app;
     }
+    
+    // Execute the request on the app
+    appInstance(req, res);
+  } catch (error) {
+    console.error('Handler Error:', error.message);
+    console.error('Stack:', error.stack);
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
   }
 }
