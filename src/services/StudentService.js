@@ -196,18 +196,35 @@ export class StudentService {
   }
 
   /**
-   * Apply to a job posting
+   * Submit application to a job posting
    * 
-   * WHY: Submit application to job posting.
-   * Triggers matching score calculation.
+   * CRITICAL METHOD FOR FRONTEND: This is how students apply for jobs.
    * 
-   * @param {number} userId - Student user ID
+   * WHY: Students apply to positions. This method prevents:
+   * 1. Duplicate applications (same student applying twice) → 409 Conflict
+   * 2. Over-subscription (more applications than positions) → 409 Conflict  
+   * 3. Race conditions (100 students apply at same time) → Row locking
+   * 
+   * HOW IT WORKS - Database Transaction with Row Locking:
+   * - TRANSACTION: Groups all DB operations as atomic unit (all succeed or all fail)
+   * - ROW LOCK: Prevents concurrent database updates to same posting
+   * - EARLY EXITS: Checks fail before commitment to minimize lock time
+   * 
+   * FRONTEND EXPECTATIONS:
+   * - Success (201): application object with id and status='submitted'
+   * - Locked (409): Already applied OR all positions filled (retry not helpful)
+   * - NotFound (404): Job posting doesn't exist
+   * - Validation (422): Missing cover_letter or other required data
+   * 
+   * @param {number} userId - Student user ID (from JWT token)
    * @param {number} postingId - Job posting ID
-   * @param {Object} data - Application data (cover letter, resume)
-   * @returns {Object} Created application
+   * @param {Object} data - Application data {cover_letter, resume_id}
+   * @returns {Object} Created application {id, status, posted_at, ...}
+   * @throws {AppError} 409=already applied/full, 404=posting not found, 422=validation error
    */
   async applyToPosting(userId, postingId, data) {
-    // Use transaction to prevent race conditions
+    // TRANSACTION: Start atomic database operation
+    // WHY: All-or-nothing execution prevents partial states (e.g., application created but position not reserved)
     return await this.models.sequelize.transaction(async (transaction) => {
       const student = await this.models.Student.findOne({
         where: { user_id: userId },
@@ -218,17 +235,21 @@ export class StudentService {
         throw new AppError('Student profile not found', 404);
       }
 
-      // Lock posting row for update to prevent race condition
+      // ROW LOCK ACQUIRED: Get posting with UPDATE lock
+      // WHY: This lock prevents other transactions from modifying this posting simultaneously
+      // The lock is held until the transaction commits or rolls back
+      // This ensures our availability check (below) stays valid when we create the application
       const posting = await this.models.OjtPosting.findByPk(postingId, {
         transaction,
-        lock: transaction.LOCK.UPDATE, // Acquires row lock
+        lock: transaction.LOCK.UPDATE, // ← Acquires exclusive row lock
       });
 
       if (!posting || posting.posting_status !== 'active') {
         throw new AppError('Job posting not found or not active', 404);
       }
 
-      // Check if student already applied (within same transaction)
+      // Check 1: Student hasn't already applied to this posting
+      // WHY check inside transaction: Prevents duplicate applications even with concurrent requests
       const existingApp = await this.models.Application.findOne({
         where: {
           student_id: student.id,
@@ -241,13 +262,15 @@ export class StudentService {
         throw new AppError('You have already applied to this posting', 409);
       }
 
-      // Check if positions available (within same transaction with lock)
-      // WHY: This check is now atomic due to row lock - no race condition
+      // Check 2: Positions still available
+      // WHY protected by row lock: No other transaction can modify posting.positions_filled
+      // between our read here and the application creation below
       if (!posting.hasPositionsAvailable()) {
         throw new AppError('All positions for this posting have been filled', 409);
       }
 
-      // Create application (within same transaction)
+      // ALL VALIDATION PASSED - Create application record
+      // WHY inside transaction: If this fails, entire transaction rolls back (no orphaned applications)
       const application = await this.models.Application.create({
         student_id: student.id,
         posting_id: postingId,
@@ -257,7 +280,8 @@ export class StudentService {
         applied_at: new Date(),
       }, { transaction });
 
-      // Increment posting application count (within same transaction)
+      // Increment positions filled counter
+      // WHY: Track how many students have applied to each position
       await posting.incrementApplicationCount();
 
       Logger.info('Application submitted', {
@@ -267,8 +291,9 @@ export class StudentService {
       });
 
       return application;
-      // Transaction automatically commits on successful return
-      // or rolls back if any error is thrown
+      // TRANSACTION AUTO-COMMITS on successful return
+      // All changes become permanent and visible to other transactions
+      // Row lock is released
     });
   }
 

@@ -124,76 +124,90 @@ export class AuthService {
       throw new AppError('Invalid email or password', 401);
     }
 
-    // NEW: Check if account is locked due to failed login attempts
+    // Check if account is locked due to failed login attempts (SECURITY FEATURE)
+    // WHY: Prevent brute-force attacks by locking after 5 failed attempts for 30 minutes
+    // FRONTEND SHOULD: Show countdown timer telling user when they can try again
     if (user.status === 'locked') {
       const lockDurationMinutes = 30;
       const timeSinceLockMs = Date.now() - new Date(user.lockedUntil).getTime();
       const timeSinceLockMinutes = timeSinceLockMs / (1000 * 60);
 
       if (timeSinceLockMinutes < lockDurationMinutes) {
+        // Account STILL locked - calculate remaining time
         const remainingMinutes = Math.ceil(lockDurationMinutes - timeSinceLockMinutes);
         Logger.warn('Login attempt on locked account', {
           email,
           remainingLockMinutes: remainingMinutes,
         });
+        // FRONTEND: Show error 423 with remaining time message
         throw new AppError(
-          `Account is temporarily locked. Try again in ${remainingMinutes} minutes`,
-          423 // Locked status code
+          `Account temporarily locked due to too many failed attempts. Try again in ${remainingMinutes} minutes`,
+          423 // HTTP Locked status code
         );
       } else {
-        // Lock period has expired, unlock the account
+        // Lock period EXPIRED - auto-unlock and reset attempts
+        // WHY auto-unlock: Users shouldn't need admin intervention after 30 min
         await user.update({
           status: 'active',
           failedLoginAttempts: 0,
+          lockedUntil: null, // Clear lock timestamp
         });
+        Logger.info('Account auto-unlocked after lockout period', { email });
       }
     }
 
-    // Check if account is active (after lock check)
+    // Check if account is active (not pending/suspended/inactive)
+    // WHY: Some accounts may be pending admin approval or suspended
     if (user.status !== 'active') {
       if (user.status === 'pending') {
-        throw new AppError('Account is pending approval. Please contact administrator', 403);
+        throw new AppError('Account pending approval. Please contact administrator', 403);
       }
       if (user.status === 'suspended') {
-        throw new AppError('Account is suspended', 403);
+        throw new AppError('Account suspended', 403);
       }
-      throw new AppError('Account is inactive', 403);
+      throw new AppError('Account inactive', 403);
     }
 
-    // Compare provided password with stored hash
-    // WHY bcrypt.compare: Secure comparison - brute-forcing the hash won't work
+    // Verify password with bcrypt.compare (constant-time comparison)
+    // WHY: Bcrypt uses constant-time comparison - prevents timing attacks
+    // A timing attack would measure how long compare() takes to deduce password
     const passwordMatches = await user.comparePassword(password);
     if (!passwordMatches) {
-      // NEW: Track failed login attempts
+      // PASSWORD INCORRECT - Increment failed attempts counter (BRUTE-FORCE PROTECTION)
       const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
       const maxFailedAttempts = 5;
 
+      // Check if we should lock the account
       if (newFailedAttempts >= maxFailedAttempts) {
-        // Lock account after 5 failed attempts
+        // Lock account - prevent further login attempts for 30 minutes
+        // WHY: After 5 failed attempts, there's likely a brute-force attack happening
         await user.update({
           status: 'locked',
-          lockedUntil: new Date(),
+          lockedUntil: new Date(), // Set current time when lock started
           failedLoginAttempts: newFailedAttempts,
         });
 
-        Logger.warn('Account locked due to failed login attempts', {
+        Logger.warn('Account LOCKED - too many failed login attempts', {
           email,
           attempts: newFailedAttempts,
+          lockedUntilMinutes: 30,
         });
 
+        // FRONTEND: Show 423 error message
         throw new AppError(
-          'Account locked due to too many failed login attempts. Try again in 30 minutes',
+          'Account locked due to too many failed attempts. Try again in 30 minutes',
           423
         );
       } else {
-        // Increment attempts
+        // Still under limit - just increment the counter and reject login
+        // FRONTEND: Show generic error (don't reveal email/password issue)
         await user.update({
           failedLoginAttempts: newFailedAttempts,
         });
 
         Logger.warn('Failed login attempt', {
           email,
-          attempts: newFailedAttempts,
+          attemptNumber: newFailedAttempts,
           maxAttempts: maxFailedAttempts,
         });
       }

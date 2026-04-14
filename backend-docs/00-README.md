@@ -27,6 +27,9 @@ This comprehensive documentation covers every aspect of the OJT System V2 Backen
 | [**10-TROUBLESHOOTING.md**](./10-TROUBLESHOOTING.md) | Common issues, debugging, maintenance | DevOps, Support |
 | [**11-ARCHITECTURE-DECISIONS.md**](./11-ARCHITECTURE-DECISIONS.md) | Why decisions were made, trade-offs | Architects, Tech Leads |
 | [**12-QUICK-START.md**](./12-QUICK-START.md) | Quick reference for developers | All Developers |
+| [**13-GOOGLE-OAUTH-GUIDE.md**](./13-GOOGLE-OAUTH-GUIDE.md) | Google OAuth 2.0 setup & flow | Frontend & DevOps |
+| **[🔥 14-FRONTEND-INTEGRATION-GUIDE.md](./14-FRONTEND-INTEGRATION-GUIDE.md)** | **Error handling, auth flows, workflows for React** | **Frontend Developers** |
+| **[🔥 15-REACT-HOOKS-LIBRARY.md](./15-REACT-HOOKS-LIBRARY.md)** | **Copy-paste React hooks for OJT API** | **React Developers** |
 
 ---
 
