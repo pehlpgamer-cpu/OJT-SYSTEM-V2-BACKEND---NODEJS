@@ -8,18 +8,10 @@
  * 4. Security (doesn't expose internal stack traces to clients)
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { config } from '../config/env.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, '../../logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
+// Vercel serverless detection
+const isVercelServerless = process.env.VERCEL === '1';
 
 /**
  * Custom error class for consistent error handling
@@ -100,9 +92,10 @@ export class Logger {
       console.log(`${color}[${level}]${'\x1b[0m'}`, message, meta);
     }
 
-    // Also write to file (useful for production debugging)
-    if (config.app.env === 'production' || level === 'ERROR') {
-      this.#writeToFile(logEntry);
+    // On Vercel/production, only log errors to console (not file)
+    if (!isVercelServerless && (config.app.env === 'production' || level === 'ERROR')) {
+      // File logging disabled on Vercel - logs only go to console/stdout
+      console.log(JSON.stringify(logEntry));
     }
   }
 
@@ -118,21 +111,6 @@ export class Logger {
       DEBUG: '\x1b[90m', // Gray
     };
     return colors[level] || '\x1b[0m';
-  }
-
-  /**
-   * Write log entry to file
-   * WHY: File storage allows reviewing logs after app restarts
-   */
-  static #writeToFile(logEntry) {
-    try {
-      const logFile = path.join(__dirname, '../../logs/app.log');
-      const entry = JSON.stringify(logEntry) + '\n';
-      fs.appendFileSync(logFile, entry);
-    } catch (error) {
-      // Silently fail - don't crash app if logging fails
-      console.error('Failed to write to log file:', error.message);
-    }
   }
 
   /**

@@ -16,6 +16,14 @@ import { Logger, AppError } from '../utils/errorHandler.js';
  * @param {Object} models - Sequelize models
  */
 export function initializePassport(models) {
+  // Skip Google OAuth strategy if credentials not configured (e.g., on Vercel without env vars)
+  if (!config.google.clientId || !config.google.clientSecret) {
+    console.warn('⚠️  Google OAuth credentials not configured - OAuth strategy will not be available');
+    // Still set up serialization for other auth methods
+    setupSerialization(models);
+    return;
+  }
+
   // Google OAuth Strategy Configuration
   passport.use(
     new GoogleStrategy(
@@ -108,6 +116,14 @@ export function initializePassport(models) {
     )
   );
 
+  setupSerialization(models);
+}
+
+/**
+ * Setup Passport serialization/deserialization
+ * Extracted to separate function since it's needed regardless of OAuth config
+ */
+function setupSerialization(models) {
   // Serialize user for session
   // WHY: Store only ID in session, retrieve full user on each request
   passport.serializeUser((user, done) => {

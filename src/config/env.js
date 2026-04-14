@@ -61,15 +61,18 @@ export const config = {
 
   // CORS (Cross-Origin Resource Sharing)
   cors: {
-    origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+    // On Vercel, allow all origins by default for testing
+    origin: process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : (process.env.VERCEL === '1' ? '*' : 'http://localhost:3000'),
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true,
+    credentials: process.env.VERCEL === '1' ? false : true, // Can't use credentials with *
   },
 
   // Logging Configuration
   logging: {
     level: process.env.LOG_LEVEL || 'info',
-    file: process.env.LOG_FILE || './logs/app.log',
+    file: process.env.LOG_FILE || './logs/app.log', // Ignored on Vercel
   },
 };
 
@@ -86,6 +89,12 @@ export function validateConfig() {
   
   if (isVercelServerless) {
     console.log('⚠️  Vercel serverless mode detected - using defaults for missing env vars');
+    
+    // Warn about Google OAuth but don't fail
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      console.warn('⚠️  Google OAuth credentials not set - OAuth routes will not work');
+    }
+    
     console.log('✅ Environment configuration loaded for production mode');
     return;
   }
