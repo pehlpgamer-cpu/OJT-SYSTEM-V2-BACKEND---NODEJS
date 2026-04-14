@@ -2,6 +2,10 @@
   "version": 2,
   "routes": [
     {
+      "src": "/minimal",
+      "dest": "/api/minimal.js"
+    },
+    {
       "src": "/ping",
       "dest": "/api/ping.js"
     },
