@@ -26,12 +26,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 2. Logging for debugging (see SQL queries in development)
  * 3. Consistent configuration across application
  */
+
+// Check if running on Vercel serverless (no DATABASE_URL env var = no real DB)
+const isVercelServerless = !process.env.DATABASE_URL && process.env.VERCEL === '1';
+
 const sequelize = new Sequelize({
   // Use in-memory SQLite for tests, file-based for development/production
   dialect: 'sqlite',
   
-  // Path to database file - use :memory: for tests
-  storage: process.env.NODE_ENV === 'test' ? ':memory:' : path.join(__dirname, '../../database', config.database.path.split('/').pop()),
+  // If on Vercel serverless with no DB URL, use in-memory for serverless compatibility
+  // Otherwise use file storage for local development
+  storage: isVercelServerless 
+    ? ':memory:' 
+    : (process.env.NODE_ENV === 'test' 
+        ? ':memory:' 
+        : path.join(__dirname, '../../database', config.database.path.split('/').pop())),
   
   /**
    * WHY logging: In development, logging SQL queries helps debug issues.
@@ -64,6 +73,17 @@ const sequelize = new Sequelize({
  */
 export async function connectDatabase() {
   try {
+    // Skip database operations on Vercel serverless without DATABASE_URL
+    if (isVercelServerless) {
+      console.log('⚠️  Vercel serverless detected - using in-memory database');
+      console.log('ℹ️  To use persistent database, set DATABASE_URL environment variable');
+      
+      // Just sync schema for in-memory DB (won't persist)
+      await sequelize.sync({ force: false, alter: false });
+      console.log('✅ In-memory database ready for Vercel serverless');
+      return sequelize;
+    }
+
     // Test connection - if this fails, we know database is unreachable
     await sequelize.authenticate();
     console.log('✅ Database connection authenticated successfully');
@@ -88,7 +108,14 @@ export async function connectDatabase() {
     if (config.app.debug) {
       console.error('Stack:', error.stack);
     }
-    throw error; // Re-throw so test knows it failed
+    
+    // On Vercel serverless, warn but don't fail
+    if (isVercelServerless) {
+      console.warn('⚠️  Continuing with in-memory database on Vercel serverless');
+      return sequelize;
+    }
+    
+    throw error; // Re-throw so local development knows it failed
   }
 }
 
