@@ -1,12 +1,8 @@
 /**
  * Vercel Serverless Function Handler
  * 
- * WHY: Vercel's serverless environment requires this handler to process HTTP requests
- * 
- * WHAT: This file:
- * 1. Imports and initializes the Express app
- * 2. Exports as a Vercel handler
- * 3. Routes all HTTP requests to the Express app
+ * This is the entry point for Vercel serverless execution.
+ * Vercel calls this handler for every HTTP request.
  */
 
 import { initializeApp } from '../src/server.js';
@@ -14,33 +10,53 @@ import { initializeApp } from '../src/server.js';
 let appInstance = null;
 
 /**
- * Get or initialize app instance (lazy loading)
+ * Initialize app once, reuse for all requests
  */
 async function getApp() {
   if (!appInstance) {
-    console.log('🚀 Initializing app...');
-    appInstance = await initializeApp();
-    console.log('✅ App ready');
+    console.log('🚀 [Handler] Initializing Express app for Vercel serverless...');
+    try {
+      appInstance = await initializeApp();
+      console.log('✅ [Handler] App initialized successfully');
+    } catch (error) {
+      console.error('❌ [Handler] Failed to initialize app:', error);
+      console.error('❌ [Handler] Error stack:', error.stack);
+      throw error;
+    }
   }
   return appInstance;
 }
 
 /**
- * Vercel Handler - main entry point
- * 
- * Vercel calls this for every HTTP request
+ * Vercel Handler - entry point for serverless execution
  */
 export default async function handler(req, res) {
+  console.log(`📝 [Handler] ${req.method} ${req.url}`);
+  console.log('📝 [Handler] Headers:', req.headers);
+  
   try {
+    console.log('📝 [Handler] Getting app instance...');
     const app = await getApp();
+    console.log('📝 [Handler] App instance obtained, executing request...');
     
-    // Call Express app directly
-    return app(req, res);
+    // Simply call the Express app
+    app(req, res);
   } catch (error) {
-    console.error('Handler error:', error);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: error.message,
-    });
+    console.error('❌ [Handler] Error:', error);
+    console.error('❌ [Handler] Error type:', error.constructor.name);
+    console.error('❌ [Handler] Error stack:', error.stack);
+    
+    if (!res.headersSent) {
+      try {
+        res.status(500).json({
+          error: 'Internal Server Error',
+          details: error.message,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('❌ [Handler] Failed to send error response:', e);
+        res.end('Internal Server Error');
+      }
+    }
   }
 }
