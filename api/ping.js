@@ -1,4 +1,4 @@
-module.exports = (req, res) => {
-  console.log('PING HANDLER CALLED');
+export default (req, res) => {
+  console.log('PING: Handler called');
   res.json({ pong: true });
 };

@@ -3,25 +3,22 @@
  */
 
 export default async function handler(req, res) {
-  console.log('📝 [test.js] Handler called');
+  console.log('TEST: Handler called');
   
   try {
-    console.log('📝 [test.js] Loading express...');
+    console.log('TEST: Creating minimal app');
     const express = (await import('express')).default;
-    console.log('✅ [test.js] Express loaded');
-    
     const app = express();
-    app.get('/', (req, res) => res.json({ status: 'ok' }));
+    app.get('/', (req, res) => res.json({ status: 'ok', test: true }));
     
-    console.log('📝 [test.js] Calling app...');
+    console.log('TEST: Calling app');
     app(req, res);
   } catch (error) {
-    console.error('❌ [test.js] Error:', error.message);
-    console.error('❌ [test.js] Stack:', error.stack);
+    console.error('TEST: Error:', error.message);
+    console.error('TEST: Stack:', error.stack);
     
     res.status(500).json({
       error: error.message,
-      stack: error.stack,
     });
   }
 }
