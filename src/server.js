@@ -487,7 +487,7 @@ async function startServer() {
 // Export functions for testing and programmatic use
 export { initializeApp, startServer };
 
-// Start server if this is the main module
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Start server only in local development (not on Vercel)
+if (process.env.VERCEL !== '1' && import.meta.url === `file://${process.argv[1]}`) {
   startServer();
 }
