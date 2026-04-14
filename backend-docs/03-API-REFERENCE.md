@@ -1,6 +1,7 @@
 # 03 - API Reference
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
+**Last Updated:** April 14, 2026  
 **Base URL:** `http://localhost:5000/api`  
 **Authentication:** Bearer Token (JWT)
 
@@ -86,7 +87,202 @@ Content-Type: application/json
 
 ---
 
-## 👤 Student Endpoints
+## � Google OAuth Endpoints
+
+**New Feature:** Google OAuth 2.0 authentication and account linking
+
+### Initiate Google OAuth Flow
+
+**Redirect to Google Login**
+
+```http
+GET /api/auth/google/redirect?role=student&linking=false
+```
+
+**Query Parameters:**
+- `role`: `student` (default), `company`, or `coordinator` - Role for new signup
+- `linking`: `true` if linking existing account, `false` for new signup
+
+**Frontend Implementation:**
+
+```html
+<!-- Sign up / Login with Google -->
+<a href="http://localhost:5000/api/auth/google/redirect">
+  Sign in with Google
+</a>
+
+<!-- Linking existing account -->
+<a href="http://localhost:5000/api/auth/google/redirect?linking=true">
+  Link Google Account
+</a>
+```
+
+**What Happens:**
+1. User is redirected to Google login page
+2. After authentication, redirected to callback endpoint
+3. Token returned via query string
+4. Frontend receives token and stores in localStorage
+
+**Response Format:**
+```
+Redirect to: https://accounts.google.com/o/oauth2/v2/auth?
+  client_id=YOUR_CLIENT_ID
+  redirect_uri=http://localhost:5000/api/auth/google/callback
+  response_type=code
+  scope=profile email
+  state=...
+```
+
+---
+
+### Google OAuth Callback
+
+```http
+GET /api/auth/google/callback?code=<auth_code>&state=<state>
+```
+
+**Parameters (auto-populated by Google):**
+- `code`: Authorization code from Google
+- `state`: CSRF protection token
+
+**Response (Redirects to Frontend):**
+```
+Frontend receives query params:
+?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&status=success
+```
+
+**Or (if linking required):**
+```
+?requiresLinking=true&existingUserId=1&status=linking_required
+```
+
+**Token Details:**
+```javascript
+// Token payload (decoded)
+{
+  id: 1,
+  email: "user@gmail.com",
+  name: "John Doe",
+  role: "student",
+  google_linked: true,
+  iat: 1712582400,
+  exp: 1712668800
+}
+```
+
+**Error Cases:**
+- `?error=invalid_code` - Authorization code invalid
+- `?error=access_denied` - User denied permission
+- Redirects to frontend with error param for handling
+
+---
+
+### Confirm Account Linking (Optional)
+
+When user tries to link Google to existing email:
+
+**Frontend Flow:**
+```javascript
+// 1. Backend returns requiresLinking=true and existingUserId
+// 2. Frontend shows confirmation dialog
+// 3. User confirms linking
+// 4. Frontend calls confirm endpoint
+```
+
+```http
+POST /api/auth/google/confirm-link
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "existingUserId": 1,
+  "confirmLinking": true
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "google_linked": true,
+    "auth_provider": "google"
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "message": "Google account linked successfully",
+  "statusCode": 200
+}
+```
+
+**Errors:**
+- 400: Email mismatch
+- 409: Google ID already linked to another user
+- 403: Cannot link (security requirement: must have password first)
+
+---
+
+### Unlink Google Account
+
+Remove Google OAuth from existing account (keep email/password auth):
+
+```http
+POST /api/auth/google/unlink
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "google_linked": false,
+    "auth_provider": "email"
+  },
+  "message": "Google account unlinked successfully",
+  "statusCode": 200
+}
+```
+
+**Errors:**
+- 400: No password set (cannot unlink - no other auth method)
+- 403: Google not linked to this account
+
+---
+
+### Validate Token
+
+Verify current token is still valid (for session checks):
+
+```http
+GET /api/auth/validate-token
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "valid": true,
+  "user": {
+    "id": 1,
+    "email": "john@example.com",
+    "role": "student",
+    "google_linked": true
+  },
+  "expiresIn": 86400,  // Seconds until expiration
+  "statusCode": 200
+}
+```
+
+**Errors:**
+- 401: Token invalid or expired
+
+---
+
+## �👤 Student Endpoints
 
 ### Get Student Profile
 

@@ -1,9 +1,9 @@
 # OJT System V2 Backend - Complete Technical Documentation
 
-**Version:** 2.0.0  
-**Last Updated:** April 9, 2026  
+**Version:** 2.1.0  
+**Last Updated:** April 14, 2026  
 **Status:** Production Ready  
-**Framework:** Node.js/Express + Sequelize ORM + SQLite
+**Framework:** Node.js/Express + Sequelize ORM + SQLite/PostgreSQL
 
 ---
 
@@ -46,8 +46,9 @@ The OJT (On-the-Job Training) System V2 is an intelligent job matching platform 
 
 ✅ **Intelligent Matching Algorithm** - Weighted scoring (Skills 40%, Location 20%, Availability 20%, GPA 10%, Program 10%)  
 ✅ **Role-Based Access Control** - Student, Company, Coordinator, Admin roles  
-✅ **Account Security** - Bcrypt password hashing, JWT tokens, failed login tracking  
-✅ **Audit Logging** - Complete audit trail of sensitive operations  
+✅ **Account Security** - Bcrypt password hashing, JWT tokens, failed login tracking, 5-attempt account lockout  
+✅ **Google OAuth 2.0** - Sign in with Google, account linking, email auto-verification  
+✅ **Audit Logging** - Complete audit trail of sensitive operations (GDPR/SOC2 compliant)  
 ✅ **Profile Management** - Students and companies can update profiles  
 ✅ **Application Tracking** - Monitor application status through workflow  
 ✅ **Skill Management** - Students add skills with proficiency levels
@@ -60,13 +61,15 @@ The OJT (On-the-Job Training) System V2 is an intelligent job matching platform 
 |-------|-----------|---------|---------|
 | **Runtime** | Node.js | 18+ | JavaScript runtime |
 | **Framework** | Express.js | ^4.18.0 | Web framework |
-| **Database** | SQLite | 5.1.0 | Lightweight relational DB |
+| **Database** | SQLite / PostgreSQL | 5.1.0 / 8.20.0 | Relational database |
 | **ORM** | Sequelize | ^6.35.0 | Database abstraction |
 | **Security** | Bcrypt | ^5.1.0 | Password hashing |
 | **Auth** | JWT (jsonwebtoken) | ^9.0.0 | Token-based auth |
+| **OAuth** | Passport.js + Google Strategy | ^0.7.0 + ^2.0.0 | Google OAuth 2.0 |
+| **Session** | express-session | ^1.17.3 | Session management (OAuth) |
 | **Validation** | express-validator | ^7.0.0 | Input validation |
-| **Middleware** | Helmet | ^7.0.0 | Security headers |
-| **Middleware** | CORS | ^2.8.5 | Cross-origin support |
+| **Security** | Helmet | ^7.0.0 | Security headers |
+| **CORS** | CORS | ^2.8.5 | Cross-origin support |
 | **Logging** | Morgan | ^1.10.0 | HTTP request logging |
 | **Testing** | Jest | ^29.0.0 | Unit/Integration tests |
 | **Testing** | Supertest | ^6.3.0 | HTTP assertion library |
@@ -75,15 +78,16 @@ The OJT (On-the-Job Training) System V2 is an intelligent job matching platform 
 
 ## 📊 System Statistics
 
-| Metric | Value |
-|--------|-------|
-| **Models** | 15 (User, Student, Company, Application, etc.) |
-| **Services** | 4 (Auth, Student, Matching, Notification) |
-| **Middleware** | 2 (Auth, Validation) |
-| **Database Tables** | 15 (with relationships) |
-| **API Endpoints** | 50+ (documented in API Reference) |
-| **Test Suites** | 4 (150+ individual tests) |
-| **Test Coverage** | 70%+ statements |
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Models** | 15 | User, Student, Company, Coordinator, OjtPosting, StudentSkill, Application, MatchScore, Resume, Notification, Message, AuditLog, PasswordResetToken, GoogleAccount, Session |
+| **Services** | 6 | AuthService, GoogleAuthService, StudentService, MatchingService, NotificationService, AuditService |
+| **Middleware** | 4 | Auth (JWT), RBAC, Rate Limiting, Input Validation |
+| **API Endpoints** | 20+ | 5 Auth, 5 Google OAuth, 4 Student, 2 Company, 2 Application, 2 Notification, 1+ Utility |
+| **Database Tables** | 15 | Full schema with relationships and indexes |
+| **Test Suites** | 4+ | Full coverage with 150+ individual tests |
+| **Test Coverage** | 75%+ | Statements, branches, functions, lines |
+| **Security Layers** | 3 | Authentication, Authorization (RBAC), Input Validation |
 
 ---
 

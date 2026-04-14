@@ -1,6 +1,7 @@
 # 05 - Services Layer Documentation
 
-**Version:** 2.0.0  
+**Version:** 2.1.0  
+**Last Updated:** April 14, 2026  
 **Architecture:** Service Layer Pattern - All business logic encapsulated
 
 ---
@@ -18,6 +19,8 @@ Services encapsulate all business logic, keeping it separate from HTTP layer (co
 import { AuthService } from './services/AuthService.js';
 import { StudentService } from './services/StudentService.js';
 import { MatchingService } from './services/MatchingService.js';
+import GoogleAuthService from './services/GoogleAuthService.js';
+import { NotificationService, AuditService } from './services/NotificationService.js';
 
 // All models loaded
 const models = initializeModels(sequelize);
@@ -26,7 +29,18 @@ const models = initializeModels(sequelize);
 const authService = new AuthService(models);
 const studentService = new StudentService(models);
 const matchingService = new MatchingService(models);
+const googleAuthService = new GoogleAuthService(models);  // ✨ NEW: OAuth support
+const notificationService = new NotificationService(models);
+const auditService = new AuditService(models);
 ```
+
+### Total Services: 6
+- ✅ AuthService - Email/password authentication
+- ✅ GoogleAuthService - Google OAuth 2.0 authentication
+- ✅ StudentService - Student profile management
+- ✅ MatchingService - Job matching algorithm
+- ✅ NotificationService - In-app notifications
+- ✅ AuditService - Compliance logging
 
 ---
 
@@ -529,7 +543,208 @@ Get currently active matching algorithm weights.
 
 ---
 
-## 📬 NotificationService
+## � GoogleAuthService
+
+**File:** `src/services/GoogleAuthService.js`  
+**Purpose:** Google OAuth 2.0 authentication and account linking  
+**Dependencies:** Passport.js, JWT  
+**Status:** ✨ New Feature (April 2026)
+
+### Constructor
+
+```javascript
+constructor(models) {
+  this.models = models;  // Injected dependency
+}
+```
+
+### authenticateWithGoogle(googleProfile)
+
+Authenticate user with Google OAuth credentials or create new user.
+
+**Parameters:**
+```javascript
+{
+  id: string,           // Google ID
+  name: string,         // From Google profile
+  email: string,        // From Google profile
+  picture: string       // Profile picture URL
+}
+```
+
+**Returns:**
+```javascript
+// Case 1: Existing Google user
+{
+  user: { id, name, email, role, status, auth_provider, google_linked },
+  token: string  // JWT
+}
+
+// Case 2: Email exists (requires linking)
+{
+  requiresLinking: true,
+  existingUserId: number,
+  googleProfile: { googleId, email, name, profilePicture }
+}
+
+// Case 3: New user created
+{
+  user: { ... },
+  token: string
+}
+```
+
+**Process:**
+1. Check if google_id already linked
+2. If not, check if email exists
+3. If email exists, return linking request
+4. If email new, create user + student profile
+5. Auto-verify email (from Google)
+6. Auto-activate account (from Google)
+7. Generate JWT token
+
+**Errors:**
+- 404: User not found (in linking flow)
+- 400: Email mismatch during linking
+- 400: Passwordless account cannot link
+
+---
+
+### requestAccountLinking(userId, googleProfile)
+
+Request permission to link Google account to existing email.
+
+**Use Case:** User has email account, wants to also login with Google
+
+**Parameters:**
+```javascript
+useId: number,
+googleProfile: { id, name, email, picture }
+```
+
+**Returns:**
+```javascript
+{
+  message: 'Please confirm linking Google account',
+  requiresConfirmation: true,
+  userId: number
+}
+```
+
+**Security Checks:**
+- Email must match existing account
+- Account must have password (else no unlink capability)
+
+**Errors:**
+- 404: User not found
+- 400: Email mismatch
+- 400: Account has no password
+
+---
+
+### confirmAccountLinking(userId, googleId, email)
+
+Confirm and finalize Google account link.
+
+**Parameters:**
+```javascript
+useId: number,
+googleId: string,
+email: string
+```
+
+**Returns:**
+```javascript
+{
+  user: { ... },
+  token: string,
+  message: 'Google account linked successfully'
+}
+```
+
+**Side Effects:**
+- Sets google_id on User record
+- Sets google_linked_at timestamp
+- Auto-verifies email (email_verified_at)
+- Generates new JWT token
+- Logs linking action
+
+**Errors:**
+- 404: User not found
+- 400: Email mismatch
+- 409: Google ID already linked to another user
+
+---
+
+### unlinkGoogleAccount(userId)
+
+Remove Google account from user (keep email account).
+
+**Use Case:** User wants to stop using Google login method
+
+**Parameters:**
+```javascript
+useId: number
+```
+
+**Returns:**
+```javascript
+{
+  user: { ... },
+  message: 'Google account unlinked successfully'
+}
+```
+
+**Security Checks:**
+- User must have password set before unlinking
+- Cannot leave account completely unsecured
+
+**Errors:**
+- 404: User not found
+- 400: No password set (no unlink capability)
+- 400: No other authentication method available
+
+---
+
+### googleAccountExists(googleId)
+
+Check if Google ID is already registered.
+
+**Parameters:**
+```javascript
+googleId: string
+```
+
+**Returns:**
+```javascript
+boolean  // true if linked to any user
+```
+
+---
+
+### getUserByGoogleId(googleId)
+
+Retrieve user by Google ID (internal use).
+
+**Parameters:**
+```javascript
+googleId: string
+```
+
+**Returns:**
+```javascript
+{
+  user: { id, name, email, role, status, auth_provider, google_linked },
+  token: string  // JWT
+}
+```
+
+**Errors:**
+- 404: User not found
+
+---
+
+## �📬 NotificationService
 
 **File:** `src/services/NotificationService.js`  
 **Purpose:** In-app notifications and audit logging
@@ -586,6 +801,183 @@ Get unread notifications for user.
     message: string,
     is_read: false,
     action_url: string,
+    createdAt: timestamp
+  }
+]
+```
+
+---
+
+## 🔍 AuditService
+
+**File:** `src/services/NotificationService.js` (exported as separate class)  
+**Purpose:** Compliance logging for sensitive operations  
+**Scope:** GDPR, HIPAA, SOC2 audit trails  
+**Status:** Production-ready
+
+### Constructor
+
+```javascript
+constructor(models) {
+  this.models = models;  // Injected dependency
+}
+```
+
+### log(data)
+
+Log action to audit trail with full context.
+
+**Parameters:**
+```javascript
+{
+  userId: number,              // Who performed action
+  userRole: string,            // student | company | coordinator | admin
+  entityType: string,          // What was affected ("User", "Application", etc)
+  entityId: number,            // Which record changed
+  action: string,              // What happened ("login", "update", "delete")
+  oldValues?: object,          // Previous state (for updates)
+  newValues?: object,          // New state (for updates)
+  ipAddress: string,           // Client IP
+  userAgent: string,           // Browser/client info
+  reason?: string,             // Optional: why action taken
+  severity?: string,           // critical | high | medium | low
+  status?: string,             // success | failure
+  errorMessage?: string        // If status=failure
+}
+```
+
+**Returns:**
+```javascript
+{
+  id: number,
+  user_id: number,
+  action: string,
+  entity_type: string,
+  entity_id: number,
+  severity: string,
+  status: string,
+  createdAt: timestamp,
+  ...
+}
+```
+
+**Behavior:**
+- Stores complete action record to AuditLog table
+- For high/critical severity: also logs to file/monitoring
+- Non-blocking: errors in audit don't break normal operations
+- Returns null on error (failures logged separately)
+
+**Example Usage:**
+```javascript
+await auditService.log({
+  userId: 42,
+  userRole: 'student',
+  entityType: 'Application',
+  entityId: 15,
+  action: 'create',
+  newValues: { status: 'submitted', posting_id: 5 },
+  ipAddress: req.ip,
+  userAgent: req.get('user-agent'),
+  severity: 'high',
+  status: 'success'
+});
+```
+
+---
+
+### logLogin(userId, ipAddress, userAgent)
+
+Log user login attempt.
+
+**Parameters:**
+```javascript
+useId: number,
+ipAddress: string,
+userAgent: string
+```
+
+**Returns:** AuditLog record
+
+**Details:**
+- Action: "login"
+- Entity: User record
+- Severity: "high"
+- Timestamps login event for security analysis
+
+**Example:**
+```javascript
+await auditService.logLogin(userId, req.ip, req.get('user-agent'));
+```
+
+---
+
+### logPasswordChange(userId, ipAddress, userAgent)
+
+Log password change (sensitive operation).
+
+**Parameters:**
+```javascript
+useId: number,
+ipAddress: string,
+userAgent: string
+```
+
+**Returns:** AuditLog record
+
+**Severity:** "critical" (always log)
+
+---
+
+### logDataAccess(userId, entityType, entityId, ipAddress, userAgent)
+
+Log data access (compliance requirement).
+
+**Use Cases:**
+- User views another user's profile
+- Admin views student applications
+- Downloads report
+
+**Parameters:**
+```javascript
+useId: number,
+entityType: string,   // What was accessed
+entityId: number,     // Which record
+ipAddress: string,
+userAgent: string
+```
+
+---
+
+### getAuditLog(filters)
+
+Retrieve audit log for analysis/compliance.
+
+**Parameters:**
+```javascript
+{
+  userId?: number,      // Filter by user
+  action?: string,      // Filter by action type
+  severity?: string,    // Filter by severity
+  dateRange?: { from, to },  // Filter by date
+  limit?: number,       // Pagination
+  offset?: number
+}
+```
+
+**Returns:**
+```javascript
+[
+  {
+    id: number,
+    user_id: number,
+    action: string,
+    entity_type: string,
+    severity: string,
+    status: string,
+    old_values: object,
+    new_values: object,
+    ip_address: string,
+    user_agent: string,
     createdAt: timestamp
   }
 ]
