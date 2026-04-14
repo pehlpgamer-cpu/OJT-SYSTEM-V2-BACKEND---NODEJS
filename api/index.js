@@ -8,19 +8,30 @@
 import { initializeApp } from '../src/server.js';
 
 let appInstance = null;
+let initError = null;
 
 /**
  * Initialize app once, reuse for all requests
  */
 async function getApp() {
+  if (initError) {
+    throw initError;
+  }
+  
   if (!appInstance) {
-    console.log('🚀 [Handler] Initializing Express app for Vercel serverless...');
+    console.log('🚀 [Handler] Starting app initialization...');
     try {
+      console.time('[Handler] Init took');
       appInstance = await initializeApp();
+      console.timeEnd('[Handler] Init took');
       console.log('✅ [Handler] App initialized successfully');
     } catch (error) {
-      console.error('❌ [Handler] Failed to initialize app:', error);
-      console.error('❌ [Handler] Error stack:', error.stack);
+      console.error('❌ [Handler] App initialization failed');
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error name:', error.name);
+      console.error('❌ Error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      console.error('❌ Stack:', error.stack);
+      initError = error;
       throw error;
     }
   }
@@ -31,30 +42,40 @@ async function getApp() {
  * Vercel Handler - entry point for serverless execution
  */
 export default async function handler(req, res) {
-  console.log(`📝 [Handler] ${req.method} ${req.url}`);
-  console.log('📝 [Handler] Headers:', req.headers);
+  console.log(`📝 [Handler] Request started: ${req.method} ${req.url}`);
   
   try {
     console.log('📝 [Handler] Getting app instance...');
     const app = await getApp();
-    console.log('📝 [Handler] App instance obtained, executing request...');
+    console.log('📝 [Handler] Executing request on app...');
     
-    // Simply call the Express app
-    app(req, res);
+    // Call the Express app
+    await new Promise((resolve, reject) => {
+      // Wrap to catch any uncaught errors
+      app(req, res);
+      
+      // Timeout after 25 seconds
+      setTimeout(() => {
+        if (!res.headersSent) {
+          reject(new Error('Request handler timeout'));
+        } else {
+          resolve();
+        }
+      }, 25000);
+    });
   } catch (error) {
-    console.error('❌ [Handler] Error:', error);
-    console.error('❌ [Handler] Error type:', error.constructor.name);
-    console.error('❌ [Handler] Error stack:', error.stack);
+    console.error('❌ [Handler] Request failed:', error.message);
     
     if (!res.headersSent) {
       try {
         res.status(500).json({
-          error: 'Internal Server Error',
-          details: error.message,
+          error: error.message,
+          type: error.name,
           timestamp: new Date().toISOString(),
+          env: process.env.VERCEL === '1' ? 'vercel' : 'local',
         });
       } catch (e) {
-        console.error('❌ [Handler] Failed to send error response:', e);
+        console.error('❌ [Handler] Failed to send error response');
         res.end('Internal Server Error');
       }
     }
