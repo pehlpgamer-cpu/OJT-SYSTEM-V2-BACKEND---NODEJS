@@ -1,13 +1,30 @@
 # 03 - API Reference
 
-**Version:** 2.1.0  
-**Last Updated:** April 14, 2026  
-**Base URL:** `http://localhost:5000/api`  
-**Authentication:** Bearer Token (JWT)
+**Version:** 2.2.0  
+**Last Updated:** April 15, 2026  
+**Base URL Dev:** `http://localhost:5000/api`  
+**Base URL Prod:** `https://ojt-system-v2-backend-nodejs.vercel.app/api`  
+**Authentication:** Bearer Token (JWT with HS256)  
+**JWT Expiration:** 7 Days
+**Default Content-Type:** `application/json`
 
 ---
 
-## 📋 Authentication Endpoints
+## 📋 Table of Contents
+1. [Authentication Endpoints](#authentication-endpoints)
+2. [Student Routes (Authenticated)](#student-routes-authenticated)
+3. [Company Routes (Authenticated)](#company-routes-authenticated)
+4. [Job Postings (Mixed Auth)](#job-postings-mixed-auth)
+5. [Applications & Matching](#applications--matching)
+6. [Notifications](#notifications)
+7. [Administrator Routes](#administrator-routes)
+8. [Error Responses](#error-responses)
+9. [Rate Limiting](#rate-limiting)
+10. [Data Format Standards](#data-format-standards)
+
+---
+
+## 🔐 Authentication Endpoints
 
 ### Register New User
 
