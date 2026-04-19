@@ -25,22 +25,53 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 1. Connection pooling (reuses database connections efficiently)
  * 2. Logging for debugging (see SQL queries in development)
  * 3. Consistent configuration across application
+ * 
+ * WHAT: Automatically detects PostgreSQL (Neon.tech) or falls back to SQLite
  */
 
-// Check if running on Vercel serverless (no DATABASE_URL env var = no real DB)
-const isVercelServerless = !process.env.DATABASE_URL && process.env.VERCEL === '1';
+// Determine database type based on DATABASE_URL environment variable
+const hasDatabaseUrl = !!process.env.DATABASE_URL;
+const isPostgres = hasDatabaseUrl && process.env.DATABASE_URL.startsWith('postgresql://');
 
-const sequelize = new Sequelize({
-  // Use in-memory SQLite for tests, file-based for development/production
-  dialect: 'sqlite',
+// Configuration object - will be populated based on database type
+let sequelizeConfig;
+
+if (isPostgres) {
+  // PostgreSQL configuration (Neon.tech or other providers)
+  sequelizeConfig = {
+    dialect: 'postgres',
+    url: process.env.DATABASE_URL,
+    // Connection pooling is CRITICAL for serverless environments
+    // Neon recommends smaller pool sizes for serverless
+    pool: {
+      min: 1,
+      max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 3,
+      idle: parseInt(process.env.DATABASE_POOL_IDLE || '20000'), // Neon closes idle connections after 5 min
+      acquire: 30000,
+    },
+    // SSL required by Neon
+    ssl: process.env.DATABASE_SSL !== 'false',
+    native: false,
+  };
+  console.log('🐘 Using PostgreSQL (Neon.tech)');
+} else {
+  // SQLite configuration (local development/testing)
+  const isVercelServerless = process.env.VERCEL === '1';
   
-  // If on Vercel serverless with no DB URL, use in-memory for serverless compatibility
-  // Otherwise use file storage for local development
-  storage: isVercelServerless 
-    ? ':memory:' 
-    : (process.env.NODE_ENV === 'test' 
-        ? ':memory:' 
-        : path.join(__dirname, '../../database', config.database.path.split('/').pop())),
+  sequelizeConfig = {
+    dialect: 'sqlite',
+    storage: isVercelServerless 
+      ? ':memory:' 
+      : (process.env.NODE_ENV === 'test' 
+          ? ':memory:' 
+          : path.join(__dirname, '../../database', config.database.path.split('/').pop())),
+  };
+  console.log('💾 Using SQLite');
+}
+
+// Add common Sequelize configuration
+const sequelize = new Sequelize({
+  ...sequelizeConfig,
   
   /**
    * WHY logging: In development, logging SQL queries helps debug issues.
@@ -73,6 +104,8 @@ const sequelize = new Sequelize({
  */
 export async function connectDatabase() {
   try {
+    const isVercelServerless = !process.env.DATABASE_URL && process.env.VERCEL === '1';
+    
     // Skip database operations on Vercel serverless without DATABASE_URL
     if (isVercelServerless) {
       console.log('⚠️  Vercel serverless detected - using in-memory database');
@@ -110,12 +143,12 @@ export async function connectDatabase() {
     }
     
     // On Vercel serverless, warn but don't fail
-    if (isVercelServerless) {
+    if (!process.env.DATABASE_URL && process.env.VERCEL === '1') {
       console.warn('⚠️  Continuing with in-memory database on Vercel serverless');
       return sequelize;
     }
     
-    throw error; // Re-throw so local development knows it failed
+    throw error; // Re-throw so deployment knows it failed
   }
 }
 
