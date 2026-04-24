@@ -49,8 +49,8 @@ async function syncSchema() {
         pool: {
           min: 0,
           max: 1,
-          idle: 3000,
-          acquire: 30000,
+          idle: 5000,
+          acquire: 60000,
           evict: 10000,
         },
         dialectOptions: {
@@ -59,9 +59,9 @@ async function syncSchema() {
             rejectUnauthorized: false,
           },
           keepalives: 1,
-          keepalivesIdle: 5,
-          connectionTimeoutMillis: 15000,
-          statement_timeout: 15000,
+          keepalivesIdle: 30,
+          connectionTimeoutMillis: 60000,
+          statement_timeout: 60000,
         },
       });
       console.log('✅ Sequelize instance created (PostgreSQL)');
@@ -92,6 +92,12 @@ async function syncSchema() {
     const dialect = sequelize.options.dialect;
     if (dialect === 'postgres') {
       console.log('   🐘 PostgreSQL (Neon.tech)');
+      
+      // Create public schema if it doesn't exist (for fresh Neon databases)
+      console.log();
+      console.log('🔄 Step 3b: Ensuring public schema exists...');
+      await sequelize.query('CREATE SCHEMA IF NOT EXISTS public');
+      console.log('✅ Public schema ready');
     } else if (dialect === 'sqlite') {
       console.log('   💾 SQLite');
     }
@@ -99,11 +105,60 @@ async function syncSchema() {
 
     // Sync schema
     console.log('🔄 Step 4: Syncing schema...');
-    console.log('   (This will create tables but NOT drop existing ones)');
-    await sequelize.sync({ 
-      alter: false,  // Don't modify existing columns
-      force: false   // Don't drop existing tables
-    });
+    
+    // For PostgreSQL, use force: true to ensure clean creation
+    let syncOptions = { force: false };
+    
+    if (dialect === 'postgres') {
+      try {
+        const result = await sequelize.query(`
+          SELECT COUNT(*) as table_count 
+          FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_type = 'BASE TABLE'
+          AND table_name IN ('users', 'students', 'companies', 'coordinators', 'ojt_postings')
+        `);
+        
+        const appTableCount = parseInt(result[0][0]?.table_count || 0);
+        
+        if (appTableCount === 0) {
+          console.log('   📋 Fresh database detected');
+          console.log('   🔄 Dropping existing tables...');
+          
+          // Drop all tables safely with CASCADE
+          await sequelize.query(`
+            DROP TABLE IF EXISTS 
+              otj_progress,
+              matching_rule,
+              match_score,
+              notification,
+              audit_log,
+              message,
+              password_reset_token,
+              skill,
+              application_skill,
+              student_skill,
+              resume,
+              application,
+              ojt_posting,
+              coordinator,
+              company,
+              student,
+              "user"
+            CASCADE
+          `);
+          
+          console.log('   ✅ Tables dropped');
+          syncOptions = { force: true };
+        }
+      } catch (err) {
+        console.log('   ⚠️  Cleanup note:', err.message);
+        syncOptions = { force: true };
+      }
+    }
+    
+    console.log('   🔄 Creating tables with force mode...');
+    await sequelize.sync(syncOptions);
     console.log('✅ Schema synced successfully');
     console.log();
 
