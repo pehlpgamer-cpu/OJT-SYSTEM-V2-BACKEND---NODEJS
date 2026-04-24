@@ -12,7 +12,8 @@
     "test:unit": "set NODE_ENV=test && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit --coverage",
     "test:integration": "set NODE_ENV=test && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/integration --coverage",
     "test:verbose": "set NODE_ENV=test && node --experimental-vm-modules node_modules/jest/bin/jest.js --verbose --coverage",
-    "seed": "node src/database/seeders/index.js"
+    "seed": "node src/database/seeders/index.js",
+    "db:sync": "node sync-schema.js"
   },
   "keywords": [
     "ojt",
