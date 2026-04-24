@@ -44,16 +44,29 @@ if (isPostgres) {
     // Connection pooling is CRITICAL for serverless environments
     // Neon recommends smaller pool sizes for serverless
     pool: {
-      min: 1,
-      max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 3,
-      idle: parseInt(process.env.DATABASE_POOL_IDLE || '20000'), // Neon closes idle connections after 5 min
-      acquire: 30000,
+      min: 0,
+      max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 2,
+      idle: 10000,
+      acquire: 10000,
+      evict: 10000,
     },
-    // SSL required by Neon
-    ssl: process.env.DATABASE_SSL !== 'false',
-    native: false,
+    // SSL configuration for Neon
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false, // Neon uses self-signed certs
+      },
+      keepalives: 1,
+      keepalivesIdle: 30,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 10000,
+    },
   };
   console.log('🐘 Using PostgreSQL (Neon.tech)');
+  if (process.env.DEBUG) {
+    console.log('   Connection URL (sanitized):', 
+      process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
+  }
 } else {
   // SQLite configuration (local development/testing)
   const isVercelServerless = process.env.VERCEL === '1';
