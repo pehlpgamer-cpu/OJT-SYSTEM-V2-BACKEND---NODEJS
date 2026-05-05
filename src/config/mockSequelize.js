@@ -7,16 +7,17 @@
 
 const mockData = {};
 
-// Mock DataTypes
+// Mock DataTypes - make them functions that can be called with parameters
 export const DataTypes = {
-  INTEGER: 'INTEGER',
-  STRING: 'STRING',
-  TEXT: 'TEXT',
-  BOOLEAN: 'BOOLEAN',
-  DATE: 'DATE',
-  JSON: 'JSON',
-  JSONB: 'JSONB',
+  INTEGER: function() { return 'INTEGER'; },
+  STRING: function(length) { return `STRING(${length || 255})`; },
+  TEXT: function() { return 'TEXT'; },
+  BOOLEAN: function() { return 'BOOLEAN'; },
+  DATE: function() { return 'DATE'; },
+  JSON: function() { return 'JSON'; },
+  JSONB: function() { return 'JSONB'; },
   UUID: 'UUID',
+  UUIDV4: 'UUIDV4',
   ENUM: (...values) => ({ type: 'ENUM', values }),
   VIRTUAL: 'VIRTUAL',
   NOW: () => new Date(),
