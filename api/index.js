@@ -12,6 +12,8 @@ export default async function handler(req, res) {
     // Initialize app once, reuse for all requests (cold start optimization)
     if (!appInstance) {
       console.log('[Vercel Handler] Initializing Express application...');
+      console.log('[Vercel Handler] DATABASE_URL set:', !!process.env.DATABASE_URL);
+      console.log('[Vercel Handler] NODE_ENV:', process.env.NODE_ENV);
       
       try {
         // Import and initialize the full application
@@ -22,12 +24,20 @@ export default async function handler(req, res) {
         console.error('[Vercel Handler] ❌ Failed to initialize app:', initError.message);
         console.error(initError.stack);
         
+        // Check if it's a pg-related error
+        if (initError.message && initError.message.includes('pg')) {
+          console.error('[Vercel Handler] ℹ️  PostgreSQL driver (pg) not available');
+          console.error('[Vercel Handler] 💡 Try removing DATABASE_URL and using SQLite for testing');
+        }
+        
         // Return error response if app initialization fails
         res.status(500).json({
           error: 'Application Initialization Failed',
           message: initError.message,
           timestamp: new Date().toISOString(),
-          hint: 'Check Vercel environment variables: DATABASE_URL, JWT_SECRET, etc.',
+          hint: initError.message?.includes('pg')
+            ? 'PostgreSQL driver missing. Remove DATABASE_URL or ensure pg is installed.'
+            : 'Check Vercel environment variables: DATABASE_URL, JWT_SECRET, etc.',
         });
         return;
       }
