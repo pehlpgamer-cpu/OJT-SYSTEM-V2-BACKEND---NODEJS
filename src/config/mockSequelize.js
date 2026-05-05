@@ -27,6 +27,12 @@ export class MockSequelize {
     this.config = config;
     this.models = {};
     this.DataTypes = DataTypes;
+    // For compatibility with code expecting sequelize.Sequelize.DataTypes
+    this.Sequelize = {
+      DataTypes,
+      Model: class {}, // Placeholder
+      Op: {}, // Placeholder for operators
+    };
     console.log('📦 Using MockSequelize (in-memory database)');
   }
 
