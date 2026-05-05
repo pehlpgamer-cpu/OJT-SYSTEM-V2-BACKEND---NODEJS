@@ -7,10 +7,26 @@
 
 const mockData = {};
 
+// Mock DataTypes
+export const DataTypes = {
+  INTEGER: 'INTEGER',
+  STRING: 'STRING',
+  TEXT: 'TEXT',
+  BOOLEAN: 'BOOLEAN',
+  DATE: 'DATE',
+  JSON: 'JSON',
+  JSONB: 'JSONB',
+  UUID: 'UUID',
+  ENUM: (...values) => ({ type: 'ENUM', values }),
+  VIRTUAL: 'VIRTUAL',
+  NOW: () => new Date(),
+};
+
 export class MockSequelize {
   constructor(config) {
     this.config = config;
     this.models = {};
+    this.DataTypes = DataTypes;
     console.log('📦 Using MockSequelize (in-memory database)');
   }
 

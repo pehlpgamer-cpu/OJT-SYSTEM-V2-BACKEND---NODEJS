@@ -190,4 +190,7 @@ export async function connectDatabase() {
   }
 }
 
+// Export DataTypes for model definitions
+export const DataTypes = sequelize?.DataTypes || (sequelize instanceof MockSequelize ? sequelize.DataTypes : {});
+
 export default sequelize;
