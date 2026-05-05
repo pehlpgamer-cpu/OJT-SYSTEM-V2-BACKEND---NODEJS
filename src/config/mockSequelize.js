@@ -85,6 +85,27 @@ export class MockSequelize {
         return (mockData[name] || []).length;
       }
 
+      // Association methods (no-op stubs for compatibility)
+      static hasOne(target, options) {
+        // Stub for associations
+        return this;
+      }
+
+      static belongsTo(target, options) {
+        // Stub for associations
+        return this;
+      }
+
+      static hasMany(target, options) {
+        // Stub for associations
+        return this;
+      }
+
+      static belongsToMany(target, options) {
+        // Stub for associations
+        return this;
+      }
+
       async save() {
         return this;
       }
