@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "buildCommand": "npm ci --legacy-peer-deps || npm install",
+  "installCommand": "npm install --legacy-peer-deps || npm install",
+  "env": {
+    "NODE_ENV": "production"
+  },
   "routes": [
     {
       "src": "/ping",
