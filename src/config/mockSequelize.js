@@ -32,7 +32,7 @@ export class MockSequelize {
   define(name, attributes, options = {}) {
     console.log(`📋 Defining mock model: ${name}`);
     
-    const Model = class {
+    class Model {
       constructor(data = {}) {
         this.id = data.id || Math.random().toString(36);
         Object.assign(this, data);
@@ -77,10 +77,10 @@ export class MockSequelize {
         if (index > -1) store.splice(index, 1);
         return true;
       }
-    };
+    }
 
-    Model.name = name;
-    Model.attributes = attributes;
+    // Don't try to set readonly name property
+    Object.defineProperty(Model, 'attributes', { value: attributes });
     this.models[name] = Model;
     return Model;
   }
