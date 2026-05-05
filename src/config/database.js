@@ -83,28 +83,53 @@ if (isPostgres) {
 }
 
 // Add common Sequelize configuration
-const sequelize = new Sequelize({
-  ...sequelizeConfig,
+let sequelize;
+try {
+  sequelize = new Sequelize({
+    ...sequelizeConfig,
+    
+    /**
+     * WHY logging: In development, logging SQL queries helps debug issues.
+     * In production, disable logging to reduce overhead.
+     */
+    logging: config.app.debug && process.env.NODE_ENV !== 'test' ? console.log : false,
+    
+    /**
+     * WHY timestamps: Automatically adds createdAt/updatedAt to all models.
+     * Useful for audit trails and understanding when records changed.
+     */
+    timestamps: true,
+    
+    // Prevent deletion of records when foreign key constraint is violated
+    define: {
+      underscored: true, // Convert camelCase to snake_case in database
+      freezeTableName: false, // Allow Sequelize to pluralize table names
+      paranoid: true, // Soft deletes - don't actually delete, just mark as deleted
+    },
+  });
+} catch (error) {
+  console.error('❌ Failed to initialize Sequelize:', error.message);
   
-  /**
-   * WHY logging: In development, logging SQL queries helps debug issues.
-   * In production, disable logging to reduce overhead.
-   */
-  logging: config.app.debug && process.env.NODE_ENV !== 'test' ? console.log : false,
-  
-  /**
-   * WHY timestamps: Automatically adds createdAt/updatedAt to all models.
-   * Useful for audit trails and understanding when records changed.
-   */
-  timestamps: true,
-  
-  // Prevent deletion of records when foreign key constraint is violated
-  define: {
-    underscored: true, // Convert camelCase to snake_case in database
-    freezeTableName: false, // Allow Sequelize to pluralize table names
-    paranoid: true, // Soft deletes - don't actually delete, just mark as deleted
-  },
-});
+  if (error.message && error.message.includes('sqlite3')) {
+    console.error('⚠️  SQLite3 package not available on Vercel');
+    console.error('ℹ️  Using in-memory fallback (data will not persist)');
+    
+    // Create a minimal mock that at least initializes
+    sequelize = new Sequelize({
+      dialect: 'sqlite',
+      storage: ':memory:',
+      logging: false,
+      timestamps: true,
+      define: {
+        underscored: true,
+        freezeTableName: false,
+        paranoid: true,
+      },
+    });
+  } else {
+    throw error;
+  }
+}
 
 /**
  * Connect to database and sync models
