@@ -13,6 +13,7 @@
 
 import { Sequelize } from 'sequelize';
 import { config } from './env.js';
+import { MockSequelize } from './mockSequelize.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -110,14 +111,13 @@ try {
 } catch (error) {
   console.error('❌ Failed to initialize Sequelize:', error.message);
   
-  if (error.message && error.message.includes('sqlite3')) {
-    console.error('⚠️  SQLite3 package not available on Vercel');
-    console.error('ℹ️  Using in-memory fallback (data will not persist)');
+  // On Vercel, native packages aren't available - use MockSequelize
+  if (process.env.VERCEL === '1' && (error.message?.includes('sqlite3') || error.message?.includes('pg'))) {
+    console.error('⚠️  Native database not available on Vercel');
+    console.log('📦 Falling back to MockSequelize (in-memory only, data not persisted)');
     
-    // Create a minimal mock that at least initializes
-    sequelize = new Sequelize({
-      dialect: 'sqlite',
-      storage: ':memory:',
+    sequelize = new MockSequelize({
+      dialect: 'mock',
       logging: false,
       timestamps: true,
       define: {
