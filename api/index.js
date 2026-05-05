@@ -1,54 +1,43 @@
 /**
- * Vercel Serverless Function Handler - Simplified Direct App
+ * Vercel Serverless Function Handler
  * 
- * Initializes a minimal Express app directly to avoid import issues on Vercel
+ * Loads and serves the full Express application from src/server.js
+ * on Vercel's serverless environment.
  */
 
 let appInstance = null;
 
 export default async function handler(req, res) {
   try {
-    // Initialize app once, reuse for all requests
+    // Initialize app once, reuse for all requests (cold start optimization)
     if (!appInstance) {
-      const express = (await import('express')).default;
-      const app = express();
+      console.log('[Vercel Handler] Initializing Express application...');
       
-      // Basic healthcheck endpoint
-      app.get('/health', (req, res) => {
-        res.json({
-          status: 'ok',
+      try {
+        // Import and initialize the full application
+        const { initializeApp } = await import('../src/server.js');
+        appInstance = await initializeApp();
+        console.log('[Vercel Handler] ✅ Express app initialized successfully');
+      } catch (initError) {
+        console.error('[Vercel Handler] ❌ Failed to initialize app:', initError.message);
+        console.error(initError.stack);
+        
+        // Return error response if app initialization fails
+        res.status(500).json({
+          error: 'Application Initialization Failed',
+          message: initError.message,
           timestamp: new Date().toISOString(),
-          environment: process.env.VERCEL === '1' ? 'vercel' : 'local',
+          hint: 'Check Vercel environment variables: DATABASE_URL, JWT_SECRET, etc.',
         });
-      });
-      
-      // API version endpoint
-      app.get('/api/version', (req, res) => {
-        res.json({
-          version: '2.0.0',
-          name: 'OJT System V2 API',
-          environment: process.env.VERCEL === '1' ? 'vercel' : 'local',
-          note: 'Simple direct handler - use npm start for full app',
-        });
-      });
-      
-      // Fallback for other routes
-      app.all('*', (req, res) => {
-        res.status(404).json({
-          error: 'Not Found',
-          message: 'This is a simplified Vercel deployment. Full app requires setting DATABASE_URL.',
-          path: req.path,
-        });
-      });
-      
-      appInstance = app;
+        return;
+      }
     }
     
-    // Execute the request on the app
+    // Execute the request on the full app
     appInstance(req, res);
   } catch (error) {
-    console.error('Handler Error:', error.message);
-    console.error('Stack:', error.stack);
+    console.error('[Vercel Handler] Request Error:', error.message);
+    console.error(error.stack);
     
     res.status(500).json({
       error: 'Internal Server Error',

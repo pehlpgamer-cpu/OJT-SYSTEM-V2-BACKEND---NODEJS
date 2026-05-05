@@ -88,6 +88,12 @@ export const authValidationRules = () => [
     .withMessage('Name must be between 2 and 255 characters')
     .matches(/^[a-zA-Z\s'-]+$/)
     .withMessage('Name can only contain letters, spaces, hyphens, and apostrophes'),
+
+  // Role validation (for registration)
+  body('role')
+    .trim()
+    .isIn(['student', 'company', 'coordinator'])
+    .withMessage('Role must be one of: student, company, or coordinator'),
 ];
 
 /**

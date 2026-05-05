@@ -22,7 +22,7 @@ import { config, validateConfig } from './config/env.js';
 import { errorHandler, wrap, Logger, AppError } from './utils/errorHandler.js';
 import { initializeModels } from './models/index.js';
 import { authMiddleware, rbacMiddleware, createRateLimiters } from './middleware/auth.js';
-import { handleValidationErrors } from './middleware/validation.js';
+import { handleValidationErrors, authValidationRules } from './middleware/validation.js';
 import { initializePassport } from './config/passport.js';
 
 // Import services
@@ -158,6 +158,8 @@ async function initializeApp() {
   app.post(
     '/api/auth/register',
     limiters.auth.middleware(),
+    authValidationRules(),
+    handleValidationErrors,
     wrap(async (req, res) => {
       const authService = new AuthService(models);
       const result = await authService.register(req.body);
