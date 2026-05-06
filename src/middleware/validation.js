@@ -25,10 +25,12 @@ export const handleValidationErrors = (req, res, next) => {
   if (!errors.isEmpty()) {
     // Format errors for readable response
     const formattedErrors = errors.array().reduce((acc, error) => {
-      if (!acc[error.param]) {
-        acc[error.param] = [];
+      const field = error.path || error.param || error.location || 'field';
+
+      if (!acc[field]) {
+        acc[field] = [];
       }
-      acc[error.param].push(error.msg);
+      acc[field].push(error.msg);
       return acc;
     }, {});
 
