@@ -7,17 +7,14 @@
  * 3. Built-in migration support for schema versioning
  * 4. Transaction support for data consistency
  * 
- * WHAT: Configures Sequelize connection to SQLite database with
+ * WHAT: Configures Sequelize connection to PostgreSQL database with
  * security and performance optimizations.
+ * 
+ * NOTE: PostgreSQL is REQUIRED. SQLite is not supported.
  */
 
 import { Sequelize } from 'sequelize';
 import { config } from './env.js';
-import { MockSequelize } from './mockSequelize.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Initialize Sequelize instance
@@ -27,60 +24,54 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * 2. Logging for debugging (see SQL queries in development)
  * 3. Consistent configuration across application
  * 
- * WHAT: Automatically detects PostgreSQL (Neon.tech) or falls back to SQLite
+ * WHAT: Configures PostgreSQL connection with proper pooling and SSL
  */
 
-// Determine database type based on DATABASE_URL environment variable
-const hasDatabaseUrl = !!process.env.DATABASE_URL;
-const isPostgres = hasDatabaseUrl && process.env.DATABASE_URL.startsWith('postgresql://');
+// PostgreSQL is REQUIRED - validate DATABASE_URL is set
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL environment variable is REQUIRED and must not be empty. '
+    + 'PostgreSQL is the only supported database. '
+    + 'Example: postgresql://user:password@host:5432/database'
+  );
+}
 
-// Configuration object - will be populated based on database type
-let sequelizeConfig;
+if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
+  throw new Error(
+    'DATABASE_URL must be a valid PostgreSQL connection string starting with "postgresql://". '
+    + 'SQLite and other database types are not supported.'
+  );
+}
 
-if (isPostgres) {
-  // PostgreSQL configuration (Neon.tech or other providers)
-  sequelizeConfig = {
-    dialect: 'postgres',
-    url: process.env.DATABASE_URL,
-    // Connection pooling is CRITICAL for serverless environments
-    // Neon recommends smaller pool sizes for serverless
-    pool: {
-      min: 0,
-      max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 2,
-      idle: 10000,
-      acquire: 10000,
-      evict: 10000,
+// PostgreSQL configuration (Neon.tech or other providers)
+const sequelizeConfig = {
+  dialect: 'postgres',
+  url: process.env.DATABASE_URL,
+  // Connection pooling is CRITICAL for serverless environments
+  // Neon recommends smaller pool sizes for serverless
+  pool: {
+    min: 0,
+    max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 2,
+    idle: 10000,
+    acquire: 10000,
+    evict: 10000,
+  },
+  // SSL configuration for Neon
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, // Neon uses self-signed certs
     },
-    // SSL configuration for Neon
-    dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false, // Neon uses self-signed certs
-      },
-      keepalives: 1,
-      keepalivesIdle: 30,
-      connectionTimeoutMillis: 10000,
-      statement_timeout: 10000,
-    },
-  };
-  console.log('🐘 Using PostgreSQL (Neon.tech)');
-  if (process.env.DEBUG) {
-    console.log('   Connection URL (sanitized):', 
-      process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
-  }
-} else {
-  // SQLite configuration (local development/testing)
-  const isVercelServerless = process.env.VERCEL === '1';
-  
-  sequelizeConfig = {
-    dialect: 'sqlite',
-    storage: isVercelServerless 
-      ? ':memory:' 
-      : (process.env.NODE_ENV === 'test' 
-          ? ':memory:' 
-          : path.join(__dirname, '../../database', config.database.path.split('/').pop())),
-  };
-  console.log('💾 Using SQLite');
+    keepalives: 1,
+    keepalivesIdle: 30,
+    connectionTimeoutMillis: 10000,
+    statement_timeout: 10000,
+  },
+};
+console.log('🐘 PostgreSQL: Database is configured');
+if (process.env.DEBUG) {
+  console.log('   Connection URL (sanitized):', 
+    process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
 }
 
 // Add common Sequelize configuration
@@ -112,26 +103,8 @@ try {
   console.error('❌ Failed to initialize Sequelize:', error.message);
   
     // On Vercel, native packages aren't available - use MockSequelize
-  if (process.env.VERCEL === '1' && (error.message?.includes('sqlite3') || error.message?.includes('pg'))) {
-    if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
-      throw error;
-    }
-      console.error('⚠️  Native database not available on Vercel');
-      console.log('📦 Falling back to MockSequelize (in-memory only, data not persisted)');
-    
-    sequelize = new MockSequelize({
-      dialect: 'mock',
-      logging: false,
-      timestamps: true,
-      define: {
-        underscored: true,
-        freezeTableName: false,
-        paranoid: true,
-      },
-    });
-  } else {
-    throw error;
-  }
+  // PostgreSQL is required - no fallback to mock or other databases
+  throw error;
 }
 
 /**
@@ -201,6 +174,6 @@ export async function connectDatabase() {
 }
 
 // Export DataTypes for model definitions
-export const DataTypes = sequelize?.DataTypes || (sequelize instanceof MockSequelize ? sequelize.DataTypes : {});
+export const DataTypes = sequelize.DataTypes;
 
 export default sequelize;

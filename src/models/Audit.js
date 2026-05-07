@@ -126,7 +126,7 @@ export const defineAuditLog = (sequelize) => {
         {
           fields: ['severity'],
         },
-        // Note: createdAt index removed - Sequelize handles timestamps differently in SQLite
+        // PostgreSQL handles timestamps natively
         {
           fields: ['user_id', 'action', 'entity_type'],
         },

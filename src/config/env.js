@@ -33,9 +33,10 @@ export const config = {
   },
 
   // Database Configuration
+  // PostgreSQL is REQUIRED - configured via DATABASE_URL
   database: {
-    connection: process.env.DB_CONNECTION || 'sqlite',
-    path: process.env.DB_PATH || './database/ojt_system.db',
+    connection: 'postgresql',
+    // DATABASE_URL must be set as an environment variable
   },
 
   // Authentication (JWT)
@@ -86,13 +87,23 @@ export const config = {
  */
 export function validateConfig() {
   const isProduction = process.env.NODE_ENV === 'production' || config.app.env === 'production' || process.env.VERCEL === '1';
-  const required = isProduction ? ['JWT_SECRET', 'DATABASE_URL'] : [];
+  // DATABASE_URL is REQUIRED in all environments (PostgreSQL only)
+  const required = ['DATABASE_URL', ...(isProduction ? ['JWT_SECRET'] : [])];
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}. ` +
+      `DATABASE_URL must be a valid PostgreSQL connection string (postgresql://...). ` +
       `Please check your .env file.`
+    );
+  }
+  
+  // Validate DATABASE_URL format
+  if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
+    throw new Error(
+      'DATABASE_URL must be a valid PostgreSQL connection string starting with "postgresql://". '
+      + 'SQLite and other database types are not supported.'
     );
   }
 
