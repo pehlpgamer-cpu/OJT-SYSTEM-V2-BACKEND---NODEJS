@@ -48,13 +48,22 @@ const sequelizeConfig = {
   dialect: 'postgres',
   url: process.env.DATABASE_URL,
   // Connection pooling is CRITICAL for serverless environments
-  // Neon recommends smaller pool sizes for serverless
+  // Neon free tier: max 20 connections total
+  // Recommendations: Keep pool max at ~40% of DB limit for Vercel + other services
   pool: {
     min: 0,
-    max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 2,
+    // Default: 5 (40% of Neon's 20 limit)
+    // Can be overridden with DATABASE_POOL_MAX env var
+    // Production: Set to 3-5, Development: Can be 10
+    max: process.env.DATABASE_POOL_MAX 
+      ? parseInt(process.env.DATABASE_POOL_MAX) 
+      : (process.env.VERCEL === '1' ? 5 : 10),
+    // Wait 30 seconds to acquire connection before timeout
+    acquire: 30000,
+    // Close idle connections after 10 seconds
     idle: 10000,
-    acquire: 10000,
-    evict: 10000,
+    // Check for idle connections every 30 seconds
+    evict: 30000,
   },
   // SSL configuration for Neon
   dialectOptions: {

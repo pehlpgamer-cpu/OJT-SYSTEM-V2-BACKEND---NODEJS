@@ -58,17 +58,27 @@ export const config = {
   // Rate Limiting (Security - prevent brute force attacks)
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // Default general limit
+    // Separate limits for different endpoint types
+    maxRequestsAuth: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS_AUTH || '10'), // 10 auth attempts per 15min
+    maxRequestsApi: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS_API || '300'), // 300 general API per 15min
+    maxRequestsPasswordReset: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS_PASSWORD_RESET || '3'), // 3 password reset attempts
   },
 
   // CORS (Cross-Origin Resource Sharing)
   cors: {
-    // On Vercel, allow all origins by default for testing
+    // Support both same-origin and cross-domain deployments
+    // Production (Vercel): Use explicit frontend origin
+    // Development: Allow localhost variants
     origin: process.env.CORS_ORIGIN 
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : (process.env.VERCEL === '1' ? '*' : ['http://localhost:3000', 'http://localhost:5173']),
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: process.env.VERCEL === '1' ? false : true, // Can't use credentials with *
+      : (process.env.VERCEL === '1' 
+          ? ['https://ojt.netlify.app', 'https://www.ojt.netlify.app'] // Explicit for production
+          : ['http://localhost:3000', 'http://localhost:5000', 'http://localhost:5173']), // Dev includes both ports
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    // CRITICAL: Always allow credentials for JWT-based auth to work cross-domain
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
   },
 
   // Logging Configuration

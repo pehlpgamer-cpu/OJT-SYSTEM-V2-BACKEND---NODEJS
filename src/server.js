@@ -16,6 +16,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import session from 'express-session';
 import passport from 'passport';
+import jwt from 'jsonwebtoken';
 import sequelize from './config/database.js';
 import { connectDatabase } from './config/database.js';
 import { config, validateConfig } from './config/env.js';
@@ -247,10 +248,11 @@ async function initializeApp() {
       saveUninitialized: false,
       cookie: {
         secure: config.app.env === 'production', // HTTPS only in production
-        httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  }));
+        httpOnly: true, // Prevent JavaScript from accessing cookie
+        sameSite: 'lax', // CSRF protection
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      },
+    }));
 
   /**
    * Initialize Passport and Sessions
@@ -345,6 +347,69 @@ async function initializeApp() {
         user: result.user,
         token: result.token,
       });
+    })
+  );
+
+  // Token Refresh Endpoint - Allows extending session without re-login
+  app.post(
+    '/api/auth/refresh',
+    limiters.auth.middleware(),
+    wrap(async (req, res) => {
+      try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith('Bearer ')) {
+          throw new AppError('Missing or invalid Authorization header', 401);
+        }
+
+        const token = authHeader.slice(7);
+        
+        // Verify token (allow expired tokens within grace period)
+        let decoded;
+        try {
+          decoded = jwt.verify(token, config.auth.secret, {
+            ignoreExpiration: true  // Allow expired tokens for refresh
+          });
+        } catch (err) {
+          throw new AppError('Invalid token', 401);
+        }
+
+        // Check if token expired more than 30 days ago (reject ancient tokens)
+        const expiresAt = decoded.exp * 1000;
+        if (Date.now() - expiresAt > 30 * 24 * 60 * 60 * 1000) {
+          throw new AppError('Token too old to refresh. Please log in again.', 401);
+        }
+
+        // Get fresh user data
+        const user = await models.User.findByPk(decoded.id);
+        if (!user || user.status !== 'active') {
+          throw new AppError('User account is not active', 403);
+        }
+
+        // Issue new token
+        const newToken = user.generateToken();
+        
+        res.status(200).json({
+          message: 'Token refreshed successfully',
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            name: user.name,
+            status: user.status,
+          },
+          token: newToken,
+          statusCode: 200,
+        });
+      } catch (error) {
+        if (error instanceof AppError) {
+          return res.status(error.statusCode).json(error.toJSON());
+        }
+        Logger.error('Token refresh failed', error);
+        res.status(401).json({
+          message: 'Token refresh failed',
+          statusCode: 401,
+        });
+      }
     })
   );
 

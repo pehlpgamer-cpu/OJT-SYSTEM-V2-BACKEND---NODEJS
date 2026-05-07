@@ -211,19 +211,16 @@ export class RateLimiter {
 /**
  * Initialize rate limiters for different endpoints
  * WHY: Different endpoints need different limits
- * Authentication endpoints need more strict limits (brute force protection)
+ * - Auth endpoints: 10 per 15min (brute force protection)
+ * - Password reset: 3 per 15min (strict)
+ * - General API: 300 per 15min (normal use)
  */
 export const createRateLimiters = () => {
-  const isTest = process.env.NODE_ENV === 'test';
-  const authMaxRequests = isTest
-    ? config.rateLimit.maxRequests
-    : Math.floor(config.rateLimit.maxRequests / 20);
-
   return {
-    // Auth endpoints: 5 attempts per 15 minutes
+    // Auth endpoints: 10 attempts per 15 minutes
     auth: new RateLimiter(
       config.rateLimit.windowMs,
-      authMaxRequests // More restrictive outside tests
+      config.rateLimit.maxRequestsAuth
     ),
 
     // General endpoints: normal limit
@@ -232,13 +229,16 @@ export const createRateLimiters = () => {
       config.rateLimit.maxRequests
     ),
 
-    // API endpoints: 100 per 15 minutes
-    api: new RateLimiter(config.rateLimit.windowMs, 100),
+    // API endpoints: generous limit for legitimate use
+    api: new RateLimiter(
+      config.rateLimit.windowMs,
+      config.rateLimit.maxRequestsApi
+    ),
 
-    // Password reset endpoints: stricter than general API
+    // Password reset endpoints: very strict (brute force protection)
     passwordReset: new RateLimiter(
       config.rateLimit.windowMs,
-      isTest ? config.rateLimit.maxRequests : Math.max(3, Math.floor(config.rateLimit.maxRequests / 20))
+      config.rateLimit.maxRequestsPasswordReset
     ),
   };
 };
