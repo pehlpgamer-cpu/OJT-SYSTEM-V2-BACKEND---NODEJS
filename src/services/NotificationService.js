@@ -7,6 +7,7 @@
  * WHAT: Create, retrieve, and manage user notifications.
  */
 
+import { Op } from 'sequelize';
 import { Logger } from '../utils/errorHandler.js';
 
 export class NotificationService {
@@ -446,7 +447,7 @@ export class AuditService {
       where: {
         severity: ['high', 'critical'],
         createdAt: {
-          [this.models.sequelize.Op.gte]: since,
+          [Op.gte]: since,
         },
       },
       order: [['createdAt', 'DESC']],
@@ -466,7 +467,7 @@ export class AuditService {
     const logs = await this.models.AuditLog.findAll({
       where: {
         createdAt: {
-          [this.models.sequelize.Op.between]: [startDate, endDate],
+          [Op.between]: [startDate, endDate],
         },
       },
       order: [['createdAt', 'DESC']],

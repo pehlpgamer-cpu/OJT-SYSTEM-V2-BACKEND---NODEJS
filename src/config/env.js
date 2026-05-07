@@ -49,6 +49,7 @@ export const config = {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    enabled: process.env.GOOGLE_OAUTH_ENABLED === 'true',
     devCallbackUrl: process.env.GOOGLE_DEV_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback',
     prodCallbackUrl: process.env.GOOGLE_PROD_CALLBACK_URL || process.env.APP_URL + '/api/auth/google/callback',
   },
@@ -64,7 +65,7 @@ export const config = {
     // On Vercel, allow all origins by default for testing
     origin: process.env.CORS_ORIGIN 
       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : (process.env.VERCEL === '1' ? '*' : 'http://localhost:3000'),
+      : (process.env.VERCEL === '1' ? '*' : ['http://localhost:3000', 'http://localhost:5173']),
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: process.env.VERCEL === '1' ? false : true, // Can't use credentials with *
   },
@@ -84,23 +85,8 @@ export const config = {
  * debugging easier.
  */
 export function validateConfig() {
-  // On Vercel serverless, skip strict validation if DATABASE_URL not set
-  const isVercelServerless = !process.env.DATABASE_URL && process.env.VERCEL === '1';
-  
-  if (isVercelServerless) {
-    console.log('⚠️  Vercel serverless mode detected - using defaults for missing env vars');
-    
-    // Warn about Google OAuth but don't fail
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      console.warn('⚠️  Google OAuth credentials not set - OAuth routes will not work');
-    }
-    
-    console.log('✅ Environment configuration loaded for production mode');
-    return;
-  }
-
-  // For local development, require JWT_SECRET
-  const required = process.env.NODE_ENV === 'production' ? [] : [];
+  const isProduction = process.env.NODE_ENV === 'production' || config.app.env === 'production' || process.env.VERCEL === '1';
+  const required = isProduction ? ['JWT_SECRET', 'DATABASE_URL'] : [];
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
@@ -108,6 +94,17 @@ export function validateConfig() {
       `Missing required environment variables: ${missing.join(', ')}. ` +
       `Please check your .env file.`
     );
+  }
+
+  if (isProduction) {
+    const secret = process.env.JWT_SECRET || '';
+    if (secret.length < 32 || secret === 'development-secret-key-change-in-production') {
+      throw new Error('JWT_SECRET must be at least 32 characters and must not use the development default');
+    }
+  }
+
+  if (config.google.enabled && (!config.google.clientId || !config.google.clientSecret)) {
+    throw new Error('GOOGLE_OAUTH_ENABLED=true requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
   }
 
   console.log(`✅ Environment configuration validated for ${config.app.env} mode`);

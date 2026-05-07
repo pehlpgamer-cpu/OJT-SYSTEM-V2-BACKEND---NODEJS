@@ -19,20 +19,21 @@ export default (sequelize, DataTypes) => {
         comment: 'Unique password reset token ID',
       },
       userId: {
-        type: DataTypes.UUID,
+        type: DataTypes.INTEGER,
+        field: 'user_id',
         allowNull: false,
         references: {
-          model: 'users',
+          model: 'Users',
           key: 'id',
         },
         onDelete: 'CASCADE',
         comment: 'User ID for which this token was generated',
       },
       token: {
-        type: DataTypes.STRING(512),
+        type: DataTypes.STRING(128),
         allowNull: false,
         unique: true,
-        comment: 'The JWT reset token itself (hashed in production)',
+        comment: 'SHA-256 hash of the reset token',
       },
       used: {
         type: DataTypes.BOOLEAN,
@@ -41,21 +42,25 @@ export default (sequelize, DataTypes) => {
       },
       usedAt: {
         type: DataTypes.DATE,
+        field: 'used_at',
         allowNull: true,
         comment: 'Timestamp when token was used to reset password',
       },
       expiresAt: {
         type: DataTypes.DATE,
+        field: 'expires_at',
         allowNull: false,
         comment: 'Token expiration timestamp (typically 1 hour from creation)',
       },
       createdAt: {
         type: DataTypes.DATE,
+        field: 'created_at',
         defaultValue: DataTypes.NOW,
         comment: 'Token creation timestamp',
       },
       updatedAt: {
         type: DataTypes.DATE,
+        field: 'updated_at',
         defaultValue: DataTypes.NOW,
         comment: 'Last update timestamp',
       },
@@ -64,7 +69,7 @@ export default (sequelize, DataTypes) => {
       tableName: 'password_reset_tokens',
       indexes: [
         {
-          fields: ['userId'],
+          fields: ['user_id'],
           comment: 'Find tokens by user',
         },
         {
@@ -73,11 +78,11 @@ export default (sequelize, DataTypes) => {
           comment: 'Ensure token uniqueness and fast lookup',
         },
         {
-          fields: ['expiresAt'],
+          fields: ['expires_at'],
           comment: 'Periodic cleanup of expired tokens',
         },
         {
-          fields: ['used', 'expiresAt'],
+          fields: ['used', 'expires_at'],
           comment: 'Find unused tokens for cleanup',
         },
       ],
@@ -91,7 +96,7 @@ export default (sequelize, DataTypes) => {
    */
   PasswordResetToken.associate = (models) => {
     PasswordResetToken.belongsTo(models.User, {
-      foreignKey: 'userId',
+      foreignKey: { name: 'userId', field: 'user_id' },
       as: 'user',
     });
   };

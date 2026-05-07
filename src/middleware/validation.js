@@ -53,18 +53,18 @@ export const handleValidationErrors = (req, res, next) => {
  * 3. Required fields are present
  * 4. No injection attacks possible
  */
-export const authValidationRules = () => [
-  // Email validation
-  body('email')
-    .trim()
-    .isEmail()
-    .withMessage('Email must be valid')
-    .normalizeEmail()
-    .toLowerCase(),
+const emailRule = () => body('email')
+  .trim()
+  .isEmail()
+  .withMessage('Email must be valid')
+  .normalizeEmail()
+  .toLowerCase();
 
-  // Password validation
-  // WHY strong password: Prevents easy brute-force attacks
-  body('password')
+export const passwordStrengthRules = (field = 'password') => [
+  body(field)
+    .isString()
+    .withMessage('Password is required')
+    .bail()
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters')
     .matches(/[A-Z]/)
@@ -73,9 +73,21 @@ export const authValidationRules = () => [
     .withMessage('Password must contain at least one number')
     .matches(/[!@#$%^&*]/)
     .withMessage('Password must contain at least one special character (!@#$%^&*)'),
+];
+
+export const registerValidationRules = () => [
+  // Email validation
+  emailRule(),
+
+  // Password validation
+  // WHY strong password: Prevents easy brute-force attacks
+  ...passwordStrengthRules('password'),
 
   // Password confirmation (for registration)
   body('password_confirmation')
+    .exists()
+    .withMessage('Password confirmation is required')
+    .bail()
     .custom((value, { req }) => {
       if (value !== req.body.password) {
         throw new Error('Passwords do not match');
@@ -94,9 +106,45 @@ export const authValidationRules = () => [
   // Role validation (for registration)
   body('role')
     .trim()
-    .isIn(['student', 'company', 'coordinator'])
-    .withMessage('Role must be one of: student, company, or coordinator'),
+    .isIn(['student', 'company'])
+    .withMessage('Role must be one of: student or company'),
 ];
+
+export const loginValidationRules = () => [
+  emailRule(),
+  body('password')
+    .isString()
+    .withMessage('Password is required')
+    .bail()
+    .notEmpty()
+    .withMessage('Password is required'),
+];
+
+export const forgotPasswordValidationRules = () => [
+  emailRule(),
+];
+
+export const resetPasswordValidationRules = () => [
+  body('token')
+    .isString()
+    .withMessage('Reset token is required')
+    .bail()
+    .notEmpty()
+    .withMessage('Reset token is required'),
+  ...passwordStrengthRules('password'),
+  body('password_confirmation')
+    .exists()
+    .withMessage('Password confirmation is required')
+    .bail()
+    .custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error('Passwords do not match');
+      }
+      return true;
+    }),
+];
+
+export const authValidationRules = registerValidationRules;
 
 /**
  * Validation rules for student profile updates
@@ -154,6 +202,12 @@ export const studentUpdateRules = () => [
     .optional()
     .isISO8601()
     .withMessage('Availability end must be valid ISO date'),
+
+  body('gpa')
+    .optional()
+    .isFloat({ min: 0, max: 4.0 })
+    .withMessage('GPA must be between 0 and 4.0')
+    .toFloat(),
 ];
 
 /**
@@ -310,6 +364,11 @@ export const contactFormRules = () => [
 export default {
   handleValidationErrors,
   authValidationRules,
+  registerValidationRules,
+  loginValidationRules,
+  forgotPasswordValidationRules,
+  resetPasswordValidationRules,
+  passwordStrengthRules,
   studentUpdateRules,
   jobPostingRules,
   skillValidationRules,

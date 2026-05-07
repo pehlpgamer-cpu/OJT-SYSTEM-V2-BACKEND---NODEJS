@@ -14,6 +14,17 @@ import { AppError, Logger, wrap } from '../utils/errorHandler.js';
 export function createGoogleAuthRoutes(googleAuthService) {
   const router = express.Router();
 
+  if (!config.google.enabled) {
+    router.use('/google', (req, res) => {
+      res.status(503).json({
+        message: 'Google OAuth is currently unavailable',
+        statusCode: 503,
+      });
+    });
+
+    return router;
+  }
+
   /**
    * Step 1: Redirect to Google OAuth
    * 

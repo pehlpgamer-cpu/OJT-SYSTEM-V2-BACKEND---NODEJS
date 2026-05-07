@@ -111,10 +111,13 @@ try {
 } catch (error) {
   console.error('❌ Failed to initialize Sequelize:', error.message);
   
-  // On Vercel, native packages aren't available - use MockSequelize
+    // On Vercel, native packages aren't available - use MockSequelize
   if (process.env.VERCEL === '1' && (error.message?.includes('sqlite3') || error.message?.includes('pg'))) {
-    console.error('⚠️  Native database not available on Vercel');
-    console.log('📦 Falling back to MockSequelize (in-memory only, data not persisted)');
+    if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
+      throw error;
+    }
+      console.error('⚠️  Native database not available on Vercel');
+      console.log('📦 Falling back to MockSequelize (in-memory only, data not persisted)');
     
     sequelize = new MockSequelize({
       dialect: 'mock',
@@ -146,6 +149,10 @@ export async function connectDatabase() {
     
     // Skip database operations on Vercel serverless without DATABASE_URL
     if (isVercelServerless) {
+      if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
+        throw new Error('DATABASE_URL is required for production Vercel deployments');
+      }
+
       console.log('⚠️  Vercel serverless detected - using in-memory database');
       console.log('ℹ️  To use persistent database, set DATABASE_URL environment variable');
       
@@ -182,6 +189,9 @@ export async function connectDatabase() {
     
     // On Vercel serverless, warn but don't fail
     if (!process.env.DATABASE_URL && process.env.VERCEL === '1') {
+      if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
+        throw error;
+      }
       console.warn('⚠️  Continuing with in-memory database on Vercel serverless');
       return sequelize;
     }

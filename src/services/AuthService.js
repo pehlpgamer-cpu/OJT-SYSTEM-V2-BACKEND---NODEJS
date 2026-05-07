@@ -12,6 +12,7 @@
 import { AppError, Logger } from '../utils/errorHandler.js';
 import { config } from '../config/env.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 export class AuthService {
   constructor(models) {
@@ -37,46 +38,38 @@ export class AuthService {
     }
 
     // Validate role is allowed
-    const allowedRoles = ['student', 'company', 'coordinator'];
+    const allowedRoles = ['student', 'company'];
     if (!allowedRoles.includes(role)) {
-      throw new AppError('Invalid role. Must be student, company, or coordinator', 400);
+      throw new AppError('Invalid role. Must be student or company', 400);
     }
 
     try {
-      // Create user with hashed password (done automatically by beforeCreate hook)
-      const user = await this.models.User.create({
-        name,
-        email: email.toLowerCase(),
-        password,
-        role,
-        status: role === 'student' ? 'active' : 'pending', // Students auto-active, others pending
-      });
+      const user = await this.models.sequelize.transaction(async (transaction) => {
+        // Create user with hashed password (done automatically by beforeCreate hook)
+        const createdUser = await this.models.User.create({
+          name,
+          email: email.toLowerCase(),
+          password,
+          role,
+          status: 'active',
+        }, { transaction });
 
-      // Create role-specific profile
-      // WHY: Each role has different data requirements
-      switch (role) {
-        case 'student':
+        // Create role-specific profile atomically with the user.
+        if (role === 'student') {
           await this.models.Student.create({
-            user_id: user.id,
+            user_id: createdUser.id,
             profile_completeness_percentage: 0,
-          });
-          break;
-
-        case 'company':
+          }, { transaction });
+        } else if (role === 'company') {
           await this.models.Company.create({
-            user_id: user.id,
+            user_id: createdUser.id,
             accreditation_status: 'pending',
             is_approved_for_posting: false,
-          });
-          break;
+          }, { transaction });
+        }
 
-        case 'coordinator':
-          await this.models.Coordinator.create({
-            user_id: user.id,
-            max_students: 50,
-          });
-          break;
-      }
+        return createdUser;
+      });
 
       // Generate authentication token
       const token = user.generateToken();
@@ -115,6 +108,10 @@ export class AuthService {
    */
   async login(email, password) {
     // WHY trim and lowercase: Prevent case/whitespace issues
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      throw new AppError('Invalid email or password', 401);
+    }
+
     email = email.trim().toLowerCase();
 
     // Find user by email
@@ -127,14 +124,13 @@ export class AuthService {
     // Check if account is locked due to failed login attempts (SECURITY FEATURE)
     // WHY: Prevent brute-force attacks by locking after 5 failed attempts for 30 minutes
     // FRONTEND SHOULD: Show countdown timer telling user when they can try again
-    if (user.status === 'locked') {
+    if (user.lockedUntil) {
       const lockDurationMinutes = 30;
-      const timeSinceLockMs = Date.now() - new Date(user.lockedUntil).getTime();
-      const timeSinceLockMinutes = timeSinceLockMs / (1000 * 60);
+      const lockedUntil = new Date(user.lockedUntil);
 
-      if (timeSinceLockMinutes < lockDurationMinutes) {
+      if (lockedUntil > new Date()) {
         // Account STILL locked - calculate remaining time
-        const remainingMinutes = Math.ceil(lockDurationMinutes - timeSinceLockMinutes);
+        const remainingMinutes = Math.ceil((lockedUntil.getTime() - Date.now()) / (1000 * 60));
         Logger.warn('Login attempt on locked account', {
           email,
           remainingLockMinutes: remainingMinutes,
@@ -148,7 +144,6 @@ export class AuthService {
         // Lock period EXPIRED - auto-unlock and reset attempts
         // WHY auto-unlock: Users shouldn't need admin intervention after 30 min
         await user.update({
-          status: 'active',
           failedLoginAttempts: 0,
           lockedUntil: null, // Clear lock timestamp
         });
@@ -182,8 +177,7 @@ export class AuthService {
         // Lock account - prevent further login attempts for 30 minutes
         // WHY: After 5 failed attempts, there's likely a brute-force attack happening
         await user.update({
-          status: 'locked',
-          lockedUntil: new Date(), // Set current time when lock started
+          lockedUntil: new Date(Date.now() + 30 * 60 * 1000),
           failedLoginAttempts: newFailedAttempts,
         });
 
@@ -219,6 +213,7 @@ export class AuthService {
     if (user.failedLoginAttempts > 0) {
       await user.update({
         failedLoginAttempts: 0,
+        lockedUntil: null,
       });
     }
 
@@ -291,12 +286,13 @@ export class AuthService {
     const resetToken = jwt.sign({ userId: user.id }, config.auth.secret, {
       expiresIn: '1h',
     });
+    const resetTokenHash = this.hashResetToken(resetToken);
 
     // NEW: Store token in database for tracking and preventing reuse
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
     await this.models.PasswordResetToken.create({
       userId: user.id,
-      token: resetToken,
+      token: resetTokenHash,
       expiresAt,
       used: false,
     });
@@ -324,51 +320,58 @@ export class AuthService {
    * @returns {Object} Success message
    */
   async resetPassword(resetToken, newPassword) {
+    this.validatePasswordStrength(newPassword);
+
     try {
       // Verify reset token signature
       const decoded = jwt.verify(resetToken, config.auth.secret);
+      const resetTokenHash = this.hashResetToken(resetToken);
 
-      // NEW: Check if token has already been used (prevent reuse)
-      const tokenRecord = await this.models.PasswordResetToken.findOne({
-        where: { token: resetToken },
-      });
-
-      if (!tokenRecord) {
-        throw new AppError('Invalid reset token', 401);
-      }
-
-      if (tokenRecord.used) {
-        Logger.warn('Attempted password reset token reuse', {
-          userId: decoded.userId,
-          usedAt: tokenRecord.usedAt,
+      return await this.models.sequelize.transaction(async (transaction) => {
+        // NEW: Check if token has already been used (prevent reuse)
+        const tokenRecord = await this.models.PasswordResetToken.findOne({
+          where: { token: resetTokenHash },
+          transaction,
+          lock: transaction.LOCK?.UPDATE,
         });
-        throw new AppError('This reset link has already been used', 401);
-      }
 
-      // Check if token has expired
-      if (new Date() > tokenRecord.expiresAt) {
-        throw new AppError('Reset token has expired', 401);
-      }
+        if (!tokenRecord) {
+          throw new AppError('Invalid reset token', 401);
+        }
 
-      // Find user
-      const user = await this.models.User.findByPk(decoded.userId);
-      if (!user) {
-        throw new AppError('User not found', 404);
-      }
+        if (tokenRecord.used) {
+          Logger.warn('Attempted password reset token reuse', {
+            userId: decoded.userId,
+            usedAt: tokenRecord.usedAt,
+          });
+          throw new AppError('This reset link has already been used', 401);
+        }
 
-      // Update password (will be hashed by beforeUpdate hook)
-      await user.update({ password: newPassword });
+        // Check if token has expired
+        if (new Date() > tokenRecord.expiresAt) {
+          throw new AppError('Reset token has expired', 401);
+        }
 
-      // NEW: Mark token as used to prevent reuse
-      tokenRecord.used = true;
-      tokenRecord.usedAt = new Date();
-      await tokenRecord.save();
+        // Find user
+        const user = await this.models.User.findByPk(decoded.userId, { transaction });
+        if (!user) {
+          throw new AppError('User not found', 404);
+        }
 
-      Logger.info('Password reset successfully', { userId: user.id });
+        // Mark token before password update in the same transaction.
+        tokenRecord.used = true;
+        tokenRecord.usedAt = new Date();
+        await tokenRecord.save({ transaction });
 
-      return {
-        message: 'Password reset successfully',
-      };
+        // Update password (will be hashed by beforeUpdate hook)
+        await user.update({ password: newPassword }, { transaction });
+
+        Logger.info('Password reset successfully', { userId: user.id });
+
+        return {
+          message: 'Password reset successfully',
+        };
+      });
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
         throw new AppError('Reset token has expired', 401);
@@ -378,6 +381,22 @@ export class AuthService {
       }
       Logger.error('Password reset failed', error, { token: resetToken?.substring(0, 20) });
       throw new AppError('Invalid reset token', 401);
+    }
+  }
+
+  hashResetToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  validatePasswordStrength(password) {
+    if (
+      typeof password !== 'string' ||
+      password.length < 8 ||
+      !/[A-Z]/.test(password) ||
+      !/[0-9]/.test(password) ||
+      !/[!@#$%^&*]/.test(password)
+    ) {
+      throw new AppError('Password does not meet requirements', 422);
     }
   }
 

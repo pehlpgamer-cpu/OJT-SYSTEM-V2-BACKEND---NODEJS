@@ -192,6 +192,10 @@ export const defineUser = (sequelize) => {
    * @returns {Promise<boolean>} - True if passwords match
    */
   User.prototype.comparePassword = async function(plainPassword) {
+    if (!this.password) {
+      return false;
+    }
+
     return await bcrypt.compare(plainPassword, this.password);
   };
 

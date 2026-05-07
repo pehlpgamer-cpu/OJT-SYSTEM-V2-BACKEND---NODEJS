@@ -15,17 +15,17 @@ module.exports = {
         defaultValue: Sequelize.UUIDV4,
         primaryKey: true,
       },
-      userId: {
-        type: Sequelize.UUID,
+      user_id: {
+        type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'users',
+          model: 'Users',
           key: 'id',
         },
         onDelete: 'CASCADE',
       },
       token: {
-        type: Sequelize.STRING(512),
+        type: Sequelize.STRING(128),
         allowNull: false,
         unique: true,
       },
@@ -33,28 +33,28 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: false,
       },
-      usedAt: {
+      used_at: {
         type: Sequelize.DATE,
         allowNull: true,
       },
-      expiresAt: {
+      expires_at: {
         type: Sequelize.DATE,
         allowNull: false,
       },
-      createdAt: {
+      created_at: {
         type: Sequelize.DATE,
         defaultValue: Sequelize.NOW,
       },
-      updatedAt: {
+      updated_at: {
         type: Sequelize.DATE,
         defaultValue: Sequelize.NOW,
       },
     });
 
     // Add indexes for performance
-    await queryInterface.addIndex('password_reset_tokens', ['userId']);
+    await queryInterface.addIndex('password_reset_tokens', ['user_id']);
     await queryInterface.addIndex('password_reset_tokens', ['token']);
-    await queryInterface.addIndex('password_reset_tokens', ['expiresAt']);
+    await queryInterface.addIndex('password_reset_tokens', ['expires_at']);
   },
 
   async down(queryInterface, Sequelize) {

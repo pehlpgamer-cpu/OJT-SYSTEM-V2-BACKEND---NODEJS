@@ -18,7 +18,7 @@ import { AppError, Logger } from '../utils/errorHandler.js';
  * WHY: Centralized token verification ensures consistent security
  * and makes it easy to change verification logic in one place.
  */
-export const authMiddleware = (req, res, next) => {
+export const authMiddleware = async (req, res, next) => {
   try {
     // Extract token from Authorization header
     // Expected format: "Bearer eyJhbGc..."
@@ -35,11 +35,37 @@ export const authMiddleware = (req, res, next) => {
     // WHY: jwt.verify() throws if token is invalid, expired, or tampered with
     const decoded = jwt.verify(token, config.auth.secret);
 
+    const models = req.app?.get?.('models');
+    const user = await models?.User?.findByPk(decoded.id);
+
+    if (!user) {
+      throw new AppError('User not found', 401);
+    }
+
+    if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      return res.status(423).json({
+        message: 'Account temporarily locked due to too many failed attempts',
+        statusCode: 423,
+      });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        message: user.status === 'suspended' ? 'Account suspended' : 'Account inactive',
+        statusCode: 403,
+      });
+    }
+
     // WHY attach to req: Makes user data available to all downstream handlers
     // without needing to pass it as function parameters
-    req.user = decoded;
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+    };
 
-    Logger.debug('User authenticated', { userId: decoded.id, email: decoded.email });
+    Logger.debug('User authenticated', { userId: user.id, email: user.email });
 
     next();
   } catch (error) {
@@ -136,12 +162,7 @@ export class RateLimiter {
    * WHY: Handles proxy setups and gets the real client IP
    */
   getClientIp(req) {
-    return (
-      req.headers['x-forwarded-for']?.split(',')[0] ||
-      req.headers['x-real-ip'] ||
-      req.connection.remoteAddress ||
-      req.ip
-    );
+    return req.ip || req.connection.remoteAddress;
   }
 
   /**
@@ -193,11 +214,16 @@ export class RateLimiter {
  * Authentication endpoints need more strict limits (brute force protection)
  */
 export const createRateLimiters = () => {
+  const isTest = process.env.NODE_ENV === 'test';
+  const authMaxRequests = isTest
+    ? config.rateLimit.maxRequests
+    : Math.floor(config.rateLimit.maxRequests / 20);
+
   return {
     // Auth endpoints: 5 attempts per 15 minutes
     auth: new RateLimiter(
       config.rateLimit.windowMs,
-      Math.floor(config.rateLimit.maxRequests / 20) // More restrictive
+      authMaxRequests // More restrictive outside tests
     ),
 
     // General endpoints: normal limit
@@ -208,5 +234,11 @@ export const createRateLimiters = () => {
 
     // API endpoints: 100 per 15 minutes
     api: new RateLimiter(config.rateLimit.windowMs, 100),
+
+    // Password reset endpoints: stricter than general API
+    passwordReset: new RateLimiter(
+      config.rateLimit.windowMs,
+      isTest ? config.rateLimit.maxRequests : Math.max(3, Math.floor(config.rateLimit.maxRequests / 20))
+    ),
   };
 };

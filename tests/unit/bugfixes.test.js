@@ -255,14 +255,13 @@ describe('Bug Fix #4: Account Lockout After Failed Attempts', () => {
     // After 5 failed attempts, account should be locked
     expect(user.failedLoginAttempts).toBe(5);
     
-    // Status should be set to 'locked'
-    // expect(user.status).toBe('locked');
+    // Lock state is tracked with lockedUntil, not the user status enum.
   });
 
   it('should prevent login on locked account for 30 minutes', async () => {
     const lockedUser = {
       id: 'user-1',
-      status: 'locked',
+      status: 'active',
       lockedUntil: new Date(), // Just locked
     };
 
@@ -276,7 +275,7 @@ describe('Bug Fix #4: Account Lockout After Failed Attempts', () => {
   it('should unlock account after 30 minute lock period', async () => {
     const lockedUser = {
       id: 'user-1',
-      status: 'locked',
+      status: 'active',
       lockedUntil: new Date(Date.now() - 31 * 60 * 1000), // Locked 31 minutes ago
       failedLoginAttempts: 5,
       update: jest.fn(),

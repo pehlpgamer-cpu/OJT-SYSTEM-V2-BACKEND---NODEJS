@@ -82,12 +82,12 @@ export function initializeModels(sequelize) {
   });
 
   User.hasMany(PasswordResetTokenModel, {
-    foreignKey: 'userId',
+    foreignKey: { name: 'userId', field: 'user_id' },
     onDelete: 'CASCADE',
     as: 'passwordResetTokens',
   });
   PasswordResetTokenModel.belongsTo(User, {
-    foreignKey: 'userId',
+    foreignKey: { name: 'userId', field: 'user_id' },
   });
 
   /**
@@ -275,7 +275,7 @@ export function initializeModels(sequelize) {
     AuditLog,
     Notification,
     Message,
-    PasswordResetToken,
+    PasswordResetToken: PasswordResetTokenModel,
     sequelize,
   };
 }

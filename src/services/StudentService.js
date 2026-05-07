@@ -11,6 +11,7 @@
  */
 
 import { AppError, Logger } from '../utils/errorHandler.js';
+import { Op } from 'sequelize';
 
 export class StudentService {
   constructor(models) {
@@ -96,6 +97,17 @@ export class StudentService {
 
     if (!student) {
       throw new AppError('Student profile not found', 404);
+    }
+
+    const existingSkill = await this.models.StudentSkill.findOne({
+      where: {
+        student_id: student.id,
+        skill_name: skillData.skill_name,
+      },
+    });
+
+    if (existingSkill) {
+      throw new AppError('Skill already exists', 409);
     }
 
     const skill = await this.models.StudentSkill.create({
@@ -490,10 +502,10 @@ export class StudentService {
       where: {
         student_id: student.id,
         overall_score: {
-          [this.models.sequelize.Op.gte]: minScore,
+          [Op.gte]: minScore,
         },
       },
-      include: ['posting'],
+      include: [{ model: this.models.OjtPosting }],
       order: [['overall_score', 'DESC']],
     });
 

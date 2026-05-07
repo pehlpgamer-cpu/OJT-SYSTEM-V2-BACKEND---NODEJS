@@ -10,18 +10,41 @@ import { AppError } from '../../src/utils/errorHandler.js';
 
 // Mock models
 function createMockModels() {
+  const users = {
+    1: {
+      id: 1,
+      name: 'Linked Google User',
+      email: 'test@example.com',
+      role: 'student',
+      password: 'hashed_password',
+      google_id: 'google_123',
+      status: 'active',
+      auth_provider: 'email',
+    },
+    2: {
+      id: 2,
+      name: 'Existing Email User',
+      email: 'existing@example.com',
+      role: 'student',
+      password: 'hashed_password',
+      google_id: null,
+      status: 'active',
+      auth_provider: 'email',
+    },
+  };
+
+  const makeUser = (user) => user && ({
+    ...user,
+    update: async (data) => {
+      Object.assign(user, data);
+      return makeUser(user);
+    },
+    generateToken: () => 'mock_token',
+  });
+
   return {
     User: {
-      findByPk: async (id) => ({
-        id,
-        name: 'Test User',
-        email: 'test@example.com',
-        role: 'student',
-        password: 'hashed_password',
-        google_id: null,
-        update: async (data) => ({ id, ...data }),
-        generateToken: () => 'mock_token',
-      }),
+      findByPk: async (id) => makeUser(users[id]),
       findByGoogleId: async (googleId) => {
         if (googleId === 'existing_google_id') {
           return {
