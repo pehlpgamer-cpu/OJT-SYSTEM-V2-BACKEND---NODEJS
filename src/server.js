@@ -31,6 +31,8 @@ import {
   resetPasswordValidationRules,
   studentUpdateRules,
   skillValidationRules,
+  matchesQueryRules,
+  applicationValidationRules,
 } from './middleware/validation.js';
 import { initializePassport } from './config/passport.js';
 
@@ -464,6 +466,11 @@ async function initializeApp() {
    * WHY: All routes below this require authentication
    */
   app.use(authMiddleware);
+  
+  /**
+   * Apply general API rate limiting to all protected routes
+   */
+  app.use(limiters.api.middleware());
 
   /**
    * Company Routes
@@ -753,6 +760,8 @@ async function initializeApp() {
    */
   app.get(
     '/api/matches',
+    matchesQueryRules(),
+    handleValidationErrors,
     wrap(async (req, res) => {
       const matchingService = new MatchingService(models);
       const studentService = new StudentService(models);
@@ -773,6 +782,8 @@ async function initializeApp() {
    */
   app.post(
     '/api/applications',
+    applicationValidationRules(),
+    handleValidationErrors,
     wrap(async (req, res) => {
       const studentService = new StudentService(models);
       const application = await studentService.applyToPosting(req.user.id, req.body.posting_id, req.body);

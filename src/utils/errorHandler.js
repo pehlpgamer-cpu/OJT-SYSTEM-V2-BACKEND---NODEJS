@@ -83,18 +83,21 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level,
       message,
+      env: config.app.env,
       ...meta,
     };
 
-    // Always log to console in development
+    // Always log to console in development with colors
     if (config.app.debug) {
       const color = this.#getColorForLevel(level);
       console.log(`${color}[${level}]${'\x1b[0m'}`, message, meta);
     }
 
-    // On Vercel/production, only log errors to console (not file)
-    if (!isVercelServerless && (config.app.env === 'production' || level === 'ERROR')) {
-      // File logging disabled on Vercel - logs only go to console/stdout
+    // Production: Always log to stdout for Vercel
+    if (config.app.env === 'production' || isVercelServerless) {
+      console.log(JSON.stringify(logEntry));
+    } else if (level === 'ERROR' || level === 'WARN') {
+      // Development: Log errors and warnings
       console.log(JSON.stringify(logEntry));
     }
   }

@@ -361,6 +361,44 @@ export const contactFormRules = () => [
     .withMessage('Phone must be a valid mobile number'),
 ];
 
+/**
+ * Validation for job matching query
+ * 
+ * WHY: Prevent invalid minScore values that cause query errors
+ */
+export const matchesQueryRules = () => [
+  query('minScore')
+    .optional()
+    .isInt({ min: 0, max: 100 })
+    .withMessage('minScore must be between 0 and 100')
+    .toInt(),
+
+  query('maxResults')
+    .optional()
+    .isInt({ min: 1, max: 500 })
+    .withMessage('maxResults must be between 1 and 500')
+    .toInt(),
+];
+
+/**
+ * Validation for job application submission
+ * 
+ * WHY: Ensure posting_id is valid before creating application
+ */
+export const applicationValidationRules = () => [
+  body('posting_id')
+    .notEmpty()
+    .withMessage('posting_id is required')
+    .isUUID()
+    .withMessage('posting_id must be a valid UUID'),
+
+  body('cover_letter')
+    .optional()
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage('Cover letter cannot exceed 2000 characters'),
+];
+
 export default {
   handleValidationErrors,
   authValidationRules,
@@ -372,6 +410,8 @@ export default {
   studentUpdateRules,
   jobPostingRules,
   skillValidationRules,
+  matchesQueryRules,
+  applicationValidationRules,
   idParamRules,
   paginationRules,
   contactFormRules,

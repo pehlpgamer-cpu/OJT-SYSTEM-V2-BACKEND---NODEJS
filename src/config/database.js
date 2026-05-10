@@ -52,12 +52,12 @@ const sequelizeConfig = {
   // Recommendations: Keep pool max at ~40% of DB limit for Vercel + other services
   pool: {
     min: 0,
-    // Default: 5 (40% of Neon's 20 limit)
-    // Can be overridden with DATABASE_POOL_MAX env var
-    // Production: Set to 3-5, Development: Can be 10
+    // Reduced to 3 for Vercel serverless - prevents pool exhaustion
+    // Neon free tier: 20 connections total
+    // With multiple functions: 3 connections per instance is safe
     max: process.env.DATABASE_POOL_MAX 
       ? parseInt(process.env.DATABASE_POOL_MAX) 
-      : (process.env.VERCEL === '1' ? 5 : 10),
+      : (process.env.VERCEL === '1' ? 3 : 10),
     // Wait 30 seconds to acquire connection before timeout
     acquire: 30000,
     // Close idle connections after 10 seconds

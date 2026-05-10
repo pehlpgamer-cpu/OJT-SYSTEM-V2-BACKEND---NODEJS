@@ -79,6 +79,7 @@ export const config = {
     // CRITICAL: Always allow credentials for JWT-based auth to work cross-domain
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200,
   },
 
   // Logging Configuration
