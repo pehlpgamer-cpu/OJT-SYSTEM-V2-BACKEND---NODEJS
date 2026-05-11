@@ -14,6 +14,7 @@
  */
 
 import { Sequelize } from 'sequelize';
+import { Pool } from '@neondatabase/serverless';
 import { config } from './env.js';
 
 /**
@@ -43,41 +44,24 @@ if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
   );
 }
 
-// PostgreSQL configuration (Neon.tech or other providers)
+// PostgreSQL configuration (Neon.tech with serverless driver)
+// WHY Neon serverless: Pure JS + WebSockets, works on Vercel without native compilation
+const neonPool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const sequelizeConfig = {
   dialect: 'postgres',
-  url: process.env.DATABASE_URL,
-  // Connection pooling is CRITICAL for serverless environments
-  // Neon free tier: max 20 connections total
-  // Recommendations: Keep pool max at ~40% of DB limit for Vercel + other services
-  pool: {
-    min: 0,
-    // Reduced to 3 for Vercel serverless - prevents pool exhaustion
-    // Neon free tier: 20 connections total
-    // With multiple functions: 3 connections per instance is safe
-    max: process.env.DATABASE_POOL_MAX 
-      ? parseInt(process.env.DATABASE_POOL_MAX) 
-      : (process.env.VERCEL === '1' ? 3 : 10),
-    // Wait 30 seconds to acquire connection before timeout
-    acquire: 30000,
-    // Close idle connections after 10 seconds
-    idle: 10000,
-    // Check for idle connections every 30 seconds
-    evict: 30000,
-  },
-  // SSL configuration for Neon
+  sequelize: undefined, // Will be set below
+  replication: undefined,
+  pool: neonPool, // Use Neon's serverless Pool directly
+  // Neon serverless uses WebSockets, minimal config needed
   dialectOptions: {
-    ssl: {
+    ssl: process.env.DATABASE_URL.includes('neon.tech') ? {
       require: true,
-      rejectUnauthorized: false, // Neon uses self-signed certs
-    },
-    keepalives: 1,
-    keepalivesIdle: 30,
-    connectionTimeoutMillis: 10000,
-    statement_timeout: 10000,
+      rejectUnauthorized: false,
+    } : undefined,
   },
 };
-console.log('🐘 PostgreSQL: Database is configured');
+console.log('🐘 PostgreSQL (Neon Serverless): Database is configured');
 if (process.env.DEBUG) {
   console.log('   Connection URL (sanitized):', 
     process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
