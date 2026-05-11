@@ -27,6 +27,12 @@ import { config } from './env.js';
  */
 
 // PostgreSQL is REQUIRED - validate DATABASE_URL is set
+console.log('[database] DATABASE_URL check:', {
+  isSet: !!process.env.DATABASE_URL,
+  startsWithPostgresql: process.env.DATABASE_URL?.startsWith('postgresql://'),
+  host: process.env.DATABASE_URL?.match(/postgresql:\/\/[^:]+:([^@]+@)?([^/:]+)/)?.[2] || 'unknown'
+});
+
 if (!process.env.DATABASE_URL) {
   throw new Error(
     'DATABASE_URL environment variable is REQUIRED and must not be empty. '
@@ -38,7 +44,7 @@ if (!process.env.DATABASE_URL) {
 if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
   throw new Error(
     'DATABASE_URL must be a valid PostgreSQL connection string starting with "postgresql://". '
-    + 'SQLite and other database types are not supported.'
+    + 'Got: ' + process.env.DATABASE_URL.substring(0, 50) + '...'
   );
 }
 
