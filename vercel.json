@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm install --include=optional && npm install pg@latest",
   "env": {
     "NODE_ENV": "production"
   },
