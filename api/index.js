@@ -21,14 +21,8 @@ export default async function handler(req, res) {
         appInstance = await initializeApp();
         console.log('[Vercel Handler] ✅ Express app initialized successfully');
       } catch (initError) {
-        console.error('[Vercel Handler] ❌ Failed to initialize app:', initError.message);
-        console.error(initError.stack);
-        
-        // Check if it's a pg-related error
-        if (initError.message && initError.message.includes('pg')) {
-          console.error('[Vercel Handler] ℹ️  PostgreSQL driver (pg) not available');
-          console.error('[Vercel Handler] 💡 Try removing DATABASE_URL and using SQLite for testing');
-        }
+        console.error('[Vercel Handler] ❌ Init failed:', initError.message);
+        console.error('[Vercel Handler] Type:', initError.constructor.name, '| Code:', initError.code);
         
         // Return error response if app initialization fails
         res.status(500).json({
@@ -36,8 +30,8 @@ export default async function handler(req, res) {
           message: initError.message,
           timestamp: new Date().toISOString(),
           hint: initError.message?.includes('pg')
-            ? 'PostgreSQL driver missing. Remove DATABASE_URL or ensure pg is installed.'
-            : 'Check Vercel environment variables: DATABASE_URL, JWT_SECRET, etc.',
+            ? 'PostgreSQL driver (pg) not available - check dependencies'
+            : 'Check environment variables: DATABASE_URL, JWT_SECRET, etc.',
         });
         return;
       }
@@ -46,8 +40,10 @@ export default async function handler(req, res) {
     // Execute the request on the full app
     appInstance(req, res);
   } catch (error) {
-    console.error('[Vercel Handler] Request Error:', error.message);
-    console.error(error.stack);
+    console.error('[Vercel Handler] Request error:', error.message, '| Method:', req.method, '| Path:', req.url);
+    if (process.env.DEBUG) {
+      console.error('[Vercel Handler] Stack:', error.stack);
+    }
     
     res.status(500).json({
       error: 'Internal Server Error',

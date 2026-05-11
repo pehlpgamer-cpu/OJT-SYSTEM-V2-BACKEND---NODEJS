@@ -62,9 +62,9 @@ const sequelizeConfig = {
     },
   },
 };
-console.log('🐘 PostgreSQL (Neon Pooler + pg): Database is configured');
+console.log('[database] 🐘 PostgreSQL (Neon Pooler + pg): Configured');
 if (process.env.DEBUG) {
-  console.log('   Connection URL (sanitized):', 
+  console.log('[database] URL (sanitized):', 
     process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
 }
 
@@ -94,10 +94,7 @@ try {
     },
   });
 } catch (error) {
-  console.error('❌ Failed to initialize Sequelize:', error.message);
-  
-    // On Vercel, native packages aren't available - use MockSequelize
-  // PostgreSQL is required - no fallback to mock or other databases
+  console.error('[database] ❌ Init failed:', error.message);
   throw error;
 }
 
@@ -120,18 +117,17 @@ export async function connectDatabase() {
         throw new Error('DATABASE_URL is required for production Vercel deployments');
       }
 
-      console.log('⚠️  Vercel serverless detected - using in-memory database');
-      console.log('ℹ️  To use persistent database, set DATABASE_URL environment variable');
+      console.log('[database] ⚠️  Vercel serverless - in-memory mode');
       
       // Just sync schema for in-memory DB (won't persist)
       await sequelize.sync({ force: false, alter: false });
-      console.log('✅ In-memory database ready for Vercel serverless');
+      console.log('[database] ✅ In-memory ready');
       return sequelize;
     }
 
     // Test connection - if this fails, we know database is unreachable
     await sequelize.authenticate();
-    console.log('✅ Database connection authenticated successfully');
+    console.log('[database] ✅ Authenticated');
 
     // Sync all models with database
     // WHY force and alter settings:
@@ -145,13 +141,13 @@ export async function connectDatabase() {
       alter: isDebug,      // Allow schema changes in development
       force: isTest        // Recreate all tables for each test
     });
-    console.log('✅ Database models synchronized');
+    console.log('[database] ✅ Models synced');
 
     return sequelize;
   } catch (error) {
-    console.error('❌ Database connection error:', error.message);
+    console.error('[database] ❌ Connection failed:', error.message, '| Code:', error.code);
     if (config.app.debug) {
-      console.error('Stack:', error.stack);
+      console.error('[database] Stack:', error.stack);
     }
     
     // On Vercel serverless, warn but don't fail
@@ -159,7 +155,7 @@ export async function connectDatabase() {
       if (process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production') {
         throw error;
       }
-      console.warn('⚠️  Continuing with in-memory database on Vercel serverless');
+      console.warn('[database] ⚠️  Fallback to in-memory mode');
       return sequelize;
     }
     

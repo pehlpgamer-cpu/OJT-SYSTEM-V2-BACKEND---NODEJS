@@ -307,8 +307,13 @@ async function initializeApp() {
     registerValidationRules(),
     handleValidationErrors,
     wrap(async (req, res) => {
+      const email = req.body?.email;
+      const role = req.body?.role;
+      console.log('[auth] Register request received:', { email: email?.split('@')[0] + '@...', role });
+      
       const authService = new AuthService(models);
       const result = await authService.register(req.body);
+      console.log('[auth] Register success:', { userId: result.user.id, email: result.user.email });
 
       // Audit log
       const auditService = new AuditService(models);
@@ -337,8 +342,11 @@ async function initializeApp() {
     loginValidationRules(),
     handleValidationErrors,
     wrap(async (req, res) => {
+      console.log('[auth] Login request received:', { email: req.body?.email?.split('@')[0] + '@...' });
+      
       const authService = new AuthService(models);
       const result = await authService.login(req.body.email, req.body.password);
+      console.log('[auth] Login success:', { userId: result.user.id });
 
       // Audit log
       const auditService = new AuditService(models);

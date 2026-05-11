@@ -90,15 +90,18 @@ export class Logger {
     // Always log to console in development with colors
     if (config.app.debug) {
       const color = this.#getColorForLevel(level);
-      console.log(`${color}[${level}]${'\x1b[0m'}`, message, meta);
+      const logMethod = level === 'ERROR' ? console.error : level === 'WARN' ? console.warn : console.log;
+      logMethod(`${color}[${level}]${'\x1b[0m'}`, message, meta);
     }
 
     // Production: Always log to stdout for Vercel
     if (config.app.env === 'production' || isVercelServerless) {
-      console.log(JSON.stringify(logEntry));
+      const logMethod = level === 'ERROR' ? console.error : level === 'WARN' ? console.warn : console.log;
+      logMethod(JSON.stringify(logEntry));
     } else if (level === 'ERROR' || level === 'WARN') {
       // Development: Log errors and warnings
-      console.log(JSON.stringify(logEntry));
+      const logMethod = level === 'ERROR' ? console.error : console.warn;
+      logMethod(JSON.stringify(logEntry));
     }
   }
 
