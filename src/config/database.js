@@ -7,14 +7,12 @@
  * 3. Built-in migration support for schema versioning
  * 4. Transaction support for data consistency
  * 
- * WHAT: Configures Sequelize connection to PostgreSQL database with
- * security and performance optimizations.
- * 
+ * WHAT: Configures PostgreSQL connection with proper pooling and SSL
  * NOTE: PostgreSQL is REQUIRED. SQLite is not supported.
  */
 
 import { Sequelize } from 'sequelize';
-import { Pool } from '@neondatabase/serverless';
+import { Client, Pool } from '@neondatabase/serverless';
 import { config } from './env.js';
 
 /**
@@ -44,21 +42,18 @@ if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
   );
 }
 
-// PostgreSQL configuration (Neon.tech with serverless driver)
-// WHY Neon serverless: Pure JS + WebSockets, works on Vercel without native compilation
+// PostgreSQL configuration (Neon.tech serverless)
+// WHY: @neondatabase/serverless = HTTP-based, no native compilation
 const neonPool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const sequelizeConfig = {
   dialect: 'postgres',
-  sequelize: undefined, // Will be set below
-  replication: undefined,
-  pool: neonPool, // Use Neon's serverless Pool directly
-  // Neon serverless uses WebSockets, minimal config needed
+  pool: neonPool, // Neon's Pool is pg-compatible
   dialectOptions: {
-    ssl: process.env.DATABASE_URL.includes('neon.tech') ? {
+    ssl: {
       require: true,
-      rejectUnauthorized: false,
-    } : undefined,
+      rejectUnauthorized: false, // Neon uses self-signed certs
+    },
   },
 };
 console.log('🐘 PostgreSQL (Neon Serverless): Database is configured');
