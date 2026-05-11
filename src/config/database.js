@@ -11,6 +11,7 @@
  * NOTE: PostgreSQL is REQUIRED. SQLite is not supported.
  */
 
+import pg from 'pg';
 import { Sequelize } from 'sequelize';
 import { config } from './env.js';
 
@@ -47,6 +48,7 @@ if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
 const sequelizeConfig = {
   dialect: 'postgres',
   url: process.env.DATABASE_URL,
+  dialectModule: pg, // Explicitly pass pg module to Sequelize
   // Connection pool - critical for serverless
   pool: {
     min: 0,
