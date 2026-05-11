@@ -12,7 +12,6 @@
  */
 
 import { Sequelize } from 'sequelize';
-import { Client, Pool } from '@neondatabase/serverless';
 import { config } from './env.js';
 
 /**
@@ -42,21 +41,28 @@ if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
   );
 }
 
-// PostgreSQL configuration (Neon.tech serverless)
-// WHY: @neondatabase/serverless = HTTP-based, no native compilation
-const neonPool = new Pool({ connectionString: process.env.DATABASE_URL });
-
+// PostgreSQL configuration (Neon pooler endpoint + pg driver)
+// WHY: Neon pooler accepts standard pg connections via TCP
+// DATABASE_URL already points to pooler: ep-*-pooler.neon.tech
 const sequelizeConfig = {
   dialect: 'postgres',
-  pool: neonPool, // Neon's Pool is pg-compatible
+  url: process.env.DATABASE_URL,
+  // Connection pool - critical for serverless
+  pool: {
+    min: 0,
+    max: 3, // Neon free tier: 20 conn total, reserve 2/3 for app
+    acquire: 30000,
+    idle: 10000,
+    evict: 30000,
+  },
   dialectOptions: {
     ssl: {
       require: true,
-      rejectUnauthorized: false, // Neon uses self-signed certs
+      rejectUnauthorized: false, // Neon certs
     },
   },
 };
-console.log('🐘 PostgreSQL (Neon Serverless): Database is configured');
+console.log('🐘 PostgreSQL (Neon Pooler + pg): Database is configured');
 if (process.env.DEBUG) {
   console.log('   Connection URL (sanitized):', 
     process.env.DATABASE_URL.replace(/:[^:/@]+@/, ':***@'));
