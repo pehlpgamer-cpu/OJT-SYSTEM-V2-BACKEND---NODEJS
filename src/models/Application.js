@@ -24,7 +24,7 @@ export const defineApplication = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Students',
+          model: 'students',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -35,7 +35,7 @@ export const defineApplication = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'OjtPostings',
+          model: 'ojt_postings',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -46,7 +46,7 @@ export const defineApplication = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-          model: 'Resumes',
+          model: 'resumes',
           key: 'id',
         },
         comment: 'Resume submitted with application',
@@ -209,7 +209,7 @@ export const defineResume = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Students',
+          model: 'students',
           key: 'id',
         },
         onDelete: 'CASCADE',

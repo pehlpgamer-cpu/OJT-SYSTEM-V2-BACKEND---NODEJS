@@ -25,7 +25,7 @@ export const defineAuditLog = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-          model: 'Users',
+          model: 'users',
           key: 'id',
         },
         comment: 'User who made the change (null for system actions)',
@@ -160,7 +160,7 @@ export const defineNotification = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Users',
+          model: 'users',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -320,7 +320,7 @@ export const defineMessage = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Users',
+          model: 'users',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -331,7 +331,7 @@ export const defineMessage = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Users',
+          model: 'users',
           key: 'id',
         },
         onDelete: 'CASCADE',

@@ -277,13 +277,16 @@ async function initializeApp() {
    * 
    * WHY: Let load balancers know if app is alive
    */
-  app.get('/health', (req, res) => {
+  const healthHandler = (req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: config.app.env,
     });
-  });
+  };
+
+  app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
 
   /**
    * API Version Endpoint

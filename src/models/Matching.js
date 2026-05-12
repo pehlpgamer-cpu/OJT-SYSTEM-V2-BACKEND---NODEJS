@@ -24,7 +24,7 @@ export const defineMatchScore = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Students',
+          model: 'students',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -35,7 +35,7 @@ export const defineMatchScore = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'OjtPostings',
+          model: 'ojt_postings',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -347,7 +347,7 @@ export const defineOjtProgress = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Applications',
+          model: 'applications',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -358,7 +358,7 @@ export const defineOjtProgress = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Students',
+          model: 'students',
           key: 'id',
         },
         onDelete: 'CASCADE',
@@ -368,7 +368,7 @@ export const defineOjtProgress = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-          model: 'Coordinators',
+          model: 'coordinators',
           key: 'id',
         },
         comment: 'Assigned coordinator overseeing progress',

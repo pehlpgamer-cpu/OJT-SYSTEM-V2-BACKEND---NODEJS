@@ -26,7 +26,7 @@ export const defineStudent = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Users', // References the User table
+          model: 'users', // References the User table
           key: 'id',
         },
         onDelete: 'CASCADE', // If user deleted, delete student profile too

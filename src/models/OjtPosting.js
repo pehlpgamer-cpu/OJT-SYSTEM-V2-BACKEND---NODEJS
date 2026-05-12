@@ -24,7 +24,7 @@ export const defineOjtPosting = (sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Companies',
+          model: 'companies',
           key: 'id',
         },
         onDelete: 'CASCADE',

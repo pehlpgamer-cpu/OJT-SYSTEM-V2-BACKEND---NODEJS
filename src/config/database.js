@@ -53,7 +53,6 @@ if (!process.env.DATABASE_URL.startsWith('postgresql://')) {
 // DATABASE_URL already points to pooler: ep-*-pooler.neon.tech
 const sequelizeConfig = {
   dialect: 'postgres',
-  url: process.env.DATABASE_URL,
   dialectModule: pg, // Explicitly pass pg module to Sequelize
   // Connection pool - critical for serverless
   pool: {
@@ -79,9 +78,9 @@ if (process.env.DEBUG) {
 // Add common Sequelize configuration
 let sequelize;
 try {
-  sequelize = new Sequelize({
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
     ...sequelizeConfig,
-    
+
     /**
      * WHY logging: In development, logging SQL queries helps debug issues.
      * In production, disable logging to reduce overhead.
@@ -137,12 +136,23 @@ export async function connectDatabase() {
     await sequelize.authenticate();
     console.log('[database] ✅ Authenticated');
 
+    // Production schemas are managed out-of-band. Running sync on every
+    // serverless cold start can race and recreate existing enums/indexes.
+    const isProduction = process.env.NODE_ENV === 'production'
+      || config.app.env === 'production'
+      || process.env.VERCEL === '1';
+    const isTest = process.env.NODE_ENV === 'test';
+
+    if (isProduction && !isTest) {
+      console.log('[database] ✅ Production schema sync skipped');
+      return sequelize;
+    }
+
     // Sync all models with database
     // WHY force and alter settings:
     // - Test: force=true (recreate all), alter=false (don't try to migrate)
     // - Debug/Dev: force=false, alter=true (safe schema updates)
     // - Prod: force=false, alter=false (use migrations)
-    const isTest = process.env.NODE_ENV === 'test';
     const isDebug = config.app.debug && !isTest;
     
     await sequelize.sync({ 
