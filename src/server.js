@@ -40,6 +40,7 @@ import { initializePassport } from './config/passport.js';
 import AuthService from './services/AuthService.js';
 import StudentService from './services/StudentService.js';
 import MatchingService from './services/MatchingService.js';
+import CoordinatorService from './services/CoordinatorService.js';
 import GoogleAuthService from './services/GoogleAuthService.js';
 import { NotificationService, AuditService } from './services/NotificationService.js';
 
@@ -688,6 +689,284 @@ async function initializeApp() {
       res.json({
         message: 'Application status updated successfully',
         application: formatApplication(application),
+      });
+    })
+  );
+
+  /**
+   * Coordinator Routes
+   */
+  app.get(
+    '/api/coordinator/dashboard',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const dashboard = await coordinatorService.getDashboard(req.user);
+
+      res.json({
+        message: 'Coordinator dashboard retrieved',
+        data: dashboard,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const programs = await coordinatorService.listPrograms(req.user);
+
+      res.json({
+        message: 'Programs retrieved',
+        data: programs,
+        count: programs.length,
+      });
+    })
+  );
+
+  app.post(
+    '/api/coordinator/programs',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const program = await coordinatorService.createProgram(req.user, req.body);
+
+      res.status(201).json({
+        message: 'Program created',
+        data: program,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs/:id',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const program = await coordinatorService.getProgram(req.params.id, req.user);
+
+      res.json({
+        message: 'Program retrieved',
+        data: program,
+      });
+    })
+  );
+
+  app.put(
+    '/api/coordinator/programs/:id',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const program = await coordinatorService.updateProgram(req.params.id, req.user, req.body);
+
+      res.json({
+        message: 'Program updated',
+        data: program,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs/:id/students',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const students = await coordinatorService.listProgramStudents(req.params.id, req.user);
+
+      res.json({
+        message: 'Program students retrieved',
+        data: students,
+        count: students.length,
+      });
+    })
+  );
+
+  app.post(
+    '/api/coordinator/programs/:id/students',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const students = await coordinatorService.addProgramStudents(req.params.id, req.user, req.body);
+
+      res.status(201).json({
+        message: 'Students added to program',
+        data: students,
+        count: students.length,
+      });
+    })
+  );
+
+  app.put(
+    '/api/coordinator/programs/:id/students/:studentId/status',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const student = await coordinatorService.updateProgramStudentStatus(
+        req.params.id,
+        req.params.studentId,
+        req.user,
+        req.body
+      );
+
+      res.json({
+        message: 'Program student status updated',
+        data: student,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs/:id/companies',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const companies = await coordinatorService.listProgramCompanies(req.params.id, req.user);
+
+      res.json({
+        message: 'Program companies retrieved',
+        data: companies,
+        count: companies.length,
+      });
+    })
+  );
+
+  app.post(
+    '/api/coordinator/programs/:id/companies',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const companies = await coordinatorService.addProgramCompanies(req.params.id, req.user, req.body);
+
+      res.status(201).json({
+        message: 'Companies added to program',
+        data: companies,
+        count: companies.length,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs/:id/postings',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const postings = await coordinatorService.listProgramPostings(req.params.id, req.user);
+
+      res.json({
+        message: 'Program postings retrieved',
+        data: postings,
+        count: postings.length,
+      });
+    })
+  );
+
+  app.post(
+    '/api/coordinator/programs/:id/postings',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const postings = await coordinatorService.addProgramPostings(req.params.id, req.user, req.body);
+
+      res.status(201).json({
+        message: 'Postings added to program',
+        data: postings,
+        count: postings.length,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/programs/:id/metrics',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const metrics = await coordinatorService.getProgramMetrics(req.params.id, req.user);
+
+      res.json({
+        message: 'Program metrics retrieved',
+        data: metrics,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/companies',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const companies = await coordinatorService.listCompanies(req.query);
+
+      res.json({
+        message: 'Companies retrieved',
+        data: companies,
+        count: companies.length,
+      });
+    })
+  );
+
+  app.put(
+    '/api/coordinator/companies/:id/accreditation',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const company = await coordinatorService.updateCompanyAccreditation(req.params.id, req.user, req.body);
+
+      res.json({
+        message: 'Company accreditation updated',
+        data: company,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/students',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const students = await coordinatorService.listStudents();
+
+      res.json({
+        message: 'Students retrieved',
+        data: students,
+        count: students.length,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/audit-logs',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const logs = await coordinatorService.getAuditLogs(req.user, req.query);
+
+      res.json({
+        message: 'Audit logs retrieved',
+        data: logs,
+        count: logs.length,
+      });
+    })
+  );
+
+  app.get(
+    '/api/coordinator/reports/placement',
+    rbacMiddleware(['coordinator', 'admin']),
+    wrap(async (req, res) => {
+      const coordinatorService = new CoordinatorService(models);
+      const report = await coordinatorService.generatePlacementReport(req.user, req.query);
+
+      if (req.query.format === 'csv') {
+        const csv = coordinatorService.placementReportToCsv(report);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="placement-report.csv"');
+        res.send(csv);
+        return;
+      }
+
+      res.json({
+        message: 'Placement report generated',
+        ...report,
       });
     })
   );

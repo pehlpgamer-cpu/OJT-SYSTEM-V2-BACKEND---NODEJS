@@ -106,8 +106,8 @@ export const registerValidationRules = () => [
   // Role validation (for registration)
   body('role')
     .trim()
-    .isIn(['student', 'company'])
-    .withMessage('Role must be one of: student or company'),
+    .isIn(['student', 'company', 'coordinator'])
+    .withMessage('Role must be one of: student, company, or coordinator'),
 ];
 
 export const loginValidationRules = () => [
@@ -389,8 +389,9 @@ export const applicationValidationRules = () => [
   body('posting_id')
     .notEmpty()
     .withMessage('posting_id is required')
-    .isUUID()
-    .withMessage('posting_id must be a valid UUID'),
+    .isInt({ min: 1 })
+    .withMessage('posting_id must be a positive integer')
+    .toInt(),
 
   body('cover_letter')
     .optional()

@@ -148,6 +148,28 @@ export const defineCompany = (sequelize) => {
         defaultValue: false,
         comment: 'Can this company post job openings?',
       },
+
+      accreditation_decision_note: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Coordinator/admin note for latest accreditation decision',
+      },
+
+      accreditation_rejection_reason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'Reason shown when accreditation is rejected',
+      },
+
+      accreditation_verified_by: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: 'users',
+          key: 'id',
+        },
+        comment: 'User who last verified accreditation',
+      },
     },
     {
       indexes: [

@@ -260,6 +260,33 @@ export class StudentService {
         throw new AppError('Job posting not found or not active', 404);
       }
 
+      const suspendedProgramLinks = await this.models.ProgramPosting.findAll({
+        where: { posting_id: posting.id },
+        include: [
+          {
+            model: this.models.OjtProgram,
+            as: 'program',
+            required: true,
+            include: [
+              {
+                model: this.models.ProgramStudent,
+                as: 'programStudents',
+                required: true,
+                where: {
+                  student_id: student.id,
+                  status: 'suspended',
+                },
+              },
+            ],
+          },
+        ],
+        transaction,
+      });
+
+      if (suspendedProgramLinks.length > 0) {
+        throw new AppError('You are suspended from the OJT program for this posting', 403);
+      }
+
       // Check 1: Student hasn't already applied to this posting
       // WHY check inside transaction: Prevents duplicate applications even with concurrent requests
       const existingApp = await this.models.Application.findOne({
@@ -498,12 +525,36 @@ export class StudentService {
       throw new AppError('Student profile not found', 404);
     }
 
-    const matches = await this.models.MatchScore.findAll({
+    const suspendedEnrollments = await this.models.ProgramStudent.findAll({
       where: {
         student_id: student.id,
-        overall_score: {
-          [Op.gte]: minScore,
-        },
+        status: 'suspended',
+      },
+      attributes: ['program_id'],
+    });
+    const suspendedProgramIds = suspendedEnrollments.map(row => row.program_id);
+    const suspendedPostingLinks = suspendedProgramIds.length > 0
+      ? await this.models.ProgramPosting.findAll({
+          where: { program_id: { [Op.in]: suspendedProgramIds } },
+          attributes: ['posting_id'],
+        })
+      : [];
+    const suspendedPostingIds = suspendedPostingLinks.map(row => row.posting_id);
+
+    const where = {
+      student_id: student.id,
+      overall_score: {
+        [Op.gte]: minScore,
+      },
+    };
+
+    if (suspendedPostingIds.length > 0) {
+      where.posting_id = { [Op.notIn]: suspendedPostingIds };
+    }
+
+    const matches = await this.models.MatchScore.findAll({
+      where: {
+        ...where,
       },
       include: [{ model: this.models.OjtPosting }],
       order: [['overall_score', 'DESC']],

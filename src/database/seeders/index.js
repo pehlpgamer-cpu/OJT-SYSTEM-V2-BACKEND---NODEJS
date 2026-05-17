@@ -114,6 +114,50 @@ async function seed() {
       console.log(`   🆔 ID: ${coordinator.id}\n`);
     }
 
+    let coordinatorProfile = await models.Coordinator.findOne({
+      where: { user_id: coordinator.id },
+    });
+
+    if (!coordinatorProfile) {
+      coordinatorProfile = await models.Coordinator.create({
+        user_id: coordinator.id,
+        department: 'Academic Affairs',
+        designation: 'OJT Coordinator',
+        office_location: 'Admin Building, Room 101',
+        phone_extension: '1001',
+        students_assigned: 0,
+        max_students: 50,
+      });
+      console.log('✅ Coordinator profile created for existing user\n');
+    }
+
+    const existingProgram = await models.OjtProgram.findOne({
+      where: {
+        coordinator_id: coordinatorProfile.id,
+        name: 'Summer OJT 2026',
+      },
+    });
+
+    if (existingProgram) {
+      console.log(`⏭️  Default OJT program already exists (ID: ${existingProgram.id})\n`);
+    } else {
+      const defaultProgram = await models.OjtProgram.create({
+        coordinator_id: coordinatorProfile.id,
+        name: 'Summer OJT 2026',
+        description: 'Default OJT program for coordinator setup and testing.',
+        start_date: '2026-06-01',
+        end_date: '2026-08-31',
+        minimum_gpa: 3.0,
+        academic_programs: ['Computer Science', 'Information Technology', 'Engineering'],
+        enrollment_enabled: true,
+        status: 'active',
+      });
+
+      console.log('✅ Default OJT program created');
+      console.log(`   📘 Program: ${defaultProgram.name}`);
+      console.log(`   🆔 ID: ${defaultProgram.id}\n`);
+    }
+
     // Step 6: Summary
     console.log('═══════════════════════════════════════════════════════');
     console.log('✨ SEEDING COMPLETE!\n');

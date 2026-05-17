@@ -38,9 +38,9 @@ export class AuthService {
     }
 
     // Validate role is allowed
-    const allowedRoles = ['student', 'company'];
+    const allowedRoles = ['student', 'company', 'coordinator'];
     if (!allowedRoles.includes(role)) {
-      throw new AppError('Invalid role. Must be student or company', 400);
+      throw new AppError('Invalid role. Must be student, company, or coordinator', 400);
     }
 
     try {
@@ -65,6 +65,14 @@ export class AuthService {
             user_id: createdUser.id,
             accreditation_status: 'pending',
             is_approved_for_posting: false,
+          }, { transaction });
+        } else if (role === 'coordinator') {
+          await this.models.Coordinator.create({
+            user_id: createdUser.id,
+            department: data.department || 'Academic Affairs',
+            designation: data.designation || 'OJT Coordinator',
+            students_assigned: 0,
+            max_students: 50,
           }, { transaction });
         }
 

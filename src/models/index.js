@@ -12,6 +12,12 @@ import { defineStudent } from './Student.js';
 import { defineCompany } from './Company.js';
 import { defineCoordinator } from './Coordinator.js';
 import { defineOjtPosting } from './OjtPosting.js';
+import {
+  defineOjtProgram,
+  defineProgramStudent,
+  defineProgramCompany,
+  defineProgramPosting,
+} from './OjtProgram.js';
 import { defineStudentSkill, definePostingSkill } from './Skill.js';
 import { defineApplication, defineResume } from './Application.js';
 import { defineMatchScore, defineMatchingRule, defineOjtProgress } from './Matching.js';
@@ -35,6 +41,10 @@ export function initializeModels(sequelize) {
   const Company = defineCompany(sequelize);
   const Coordinator = defineCoordinator(sequelize);
   const OjtPosting = defineOjtPosting(sequelize);
+  const OjtProgram = defineOjtProgram(sequelize);
+  const ProgramStudent = defineProgramStudent(sequelize);
+  const ProgramCompany = defineProgramCompany(sequelize);
+  const ProgramPosting = defineProgramPosting(sequelize);
   const StudentSkill = defineStudentSkill(sequelize);
   const PostingSkill = definePostingSkill(sequelize);
   const Application = defineApplication(sequelize);
@@ -161,6 +171,73 @@ export function initializeModels(sequelize) {
     foreignKey: 'coordinator_id',
   });
 
+  Coordinator.hasMany(OjtProgram, {
+    foreignKey: 'coordinator_id',
+    onDelete: 'CASCADE',
+    as: 'programs',
+  });
+  OjtProgram.belongsTo(Coordinator, {
+    foreignKey: 'coordinator_id',
+    as: 'coordinator',
+  });
+
+  OjtProgram.hasMany(ProgramStudent, {
+    foreignKey: 'program_id',
+    onDelete: 'CASCADE',
+    as: 'programStudents',
+  });
+  ProgramStudent.belongsTo(OjtProgram, {
+    foreignKey: 'program_id',
+    as: 'program',
+  });
+  Student.hasMany(ProgramStudent, {
+    foreignKey: 'student_id',
+    onDelete: 'CASCADE',
+    as: 'programEnrollments',
+  });
+  ProgramStudent.belongsTo(Student, {
+    foreignKey: 'student_id',
+    as: 'student',
+  });
+
+  OjtProgram.hasMany(ProgramCompany, {
+    foreignKey: 'program_id',
+    onDelete: 'CASCADE',
+    as: 'programCompanies',
+  });
+  ProgramCompany.belongsTo(OjtProgram, {
+    foreignKey: 'program_id',
+    as: 'program',
+  });
+  Company.hasMany(ProgramCompany, {
+    foreignKey: 'company_id',
+    onDelete: 'CASCADE',
+    as: 'programMemberships',
+  });
+  ProgramCompany.belongsTo(Company, {
+    foreignKey: 'company_id',
+    as: 'company',
+  });
+
+  OjtProgram.hasMany(ProgramPosting, {
+    foreignKey: 'program_id',
+    onDelete: 'CASCADE',
+    as: 'programPostings',
+  });
+  ProgramPosting.belongsTo(OjtProgram, {
+    foreignKey: 'program_id',
+    as: 'program',
+  });
+  OjtPosting.hasMany(ProgramPosting, {
+    foreignKey: 'posting_id',
+    onDelete: 'CASCADE',
+    as: 'programLinks',
+  });
+  ProgramPosting.belongsTo(OjtPosting, {
+    foreignKey: 'posting_id',
+    as: 'posting',
+  });
+
   /**
    * JOB POSTING RELATIONSHIPS
    */
@@ -265,6 +342,10 @@ export function initializeModels(sequelize) {
     Company,
     Coordinator,
     OjtPosting,
+    OjtProgram,
+    ProgramStudent,
+    ProgramCompany,
+    ProgramPosting,
     StudentSkill,
     PostingSkill,
     Application,

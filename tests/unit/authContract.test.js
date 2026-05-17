@@ -54,6 +54,9 @@ function createModels(overrides = {}) {
     Company: {
       create: jest.fn().mockResolvedValue({ id: 1 }),
     },
+    Coordinator: {
+      create: jest.fn().mockResolvedValue({ id: 1 }),
+    },
     PasswordResetToken: {
       create: jest.fn().mockResolvedValue({ id: 'token-id' }),
       findOne: jest.fn(),
@@ -100,18 +103,26 @@ describe('Auth contract', () => {
     );
   });
 
-  it('rejects coordinator public registration', async () => {
-    const service = new AuthService(createModels());
+  it('registers coordinator role with coordinator profile', async () => {
+    const models = createModels();
+    const service = new AuthService(models);
 
-    await expect(service.register({
+    const result = await service.register({
       name: 'Coordinator User',
       email: 'coordinator@example.com',
       password: 'SecurePass123!',
       role: 'coordinator',
-    })).rejects.toMatchObject({
-      statusCode: 400,
-      message: 'Invalid role. Must be student or company',
     });
+
+    expect(result.user.role).toBe('coordinator');
+    expect(models.Coordinator.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 10,
+        department: 'Academic Affairs',
+        designation: 'OJT Coordinator',
+      }),
+      expect.any(Object)
+    );
   });
 
   it('allows company login while accreditation is pending', async () => {
