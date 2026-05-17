@@ -5,12 +5,22 @@
  */
 
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.join(__dirname, '.env.local') });
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 import pg from 'pg';
 
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = 'production';
+}
+
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required. Set it in .env.local or .env before running db:sync.');
 }
 
 async function syncSchema() {
