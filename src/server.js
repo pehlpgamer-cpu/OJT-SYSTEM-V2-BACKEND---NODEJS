@@ -83,6 +83,14 @@ function toPlain(record) {
   return record?.toJSON ? record.toJSON() : record;
 }
 
+function getAuditContext(req) {
+  return {
+    userRole: req.user?.role || null,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+  };
+}
+
 function normalizeCompanyProfilePayload(body = {}) {
   const aliases = {
     industry: 'industry_type',
@@ -322,7 +330,9 @@ async function initializeApp() {
       // Audit log
       const auditService = new AuditService(models);
       await auditService.log({
+        ...getAuditContext(req),
         userId: result.user.id,
+        userRole: result.user.role,
         action: 'create',
         entityType: 'User',
         entityId: result.user.id,
@@ -354,7 +364,12 @@ async function initializeApp() {
 
       // Audit log
       const auditService = new AuditService(models);
-      await auditService.logLogin(result.user.id, req.ip, req.get('user-agent'));
+      await auditService.logLogin(
+        result.user.id,
+        req.ip,
+        req.get('user-agent'),
+        result.user.role
+      );
 
       res.json({
         message: 'Login successful',
@@ -455,7 +470,19 @@ async function initializeApp() {
     handleValidationErrors,
     wrap(async (req, res) => {
       const authService = new AuthService(models);
-      await authService.resetPassword(req.body.token, req.body.password);
+      const result = await authService.resetPassword(req.body.token, req.body.password);
+
+      const auditService = new AuditService(models);
+      await auditService.log({
+        ...getAuditContext(req),
+        userId: result.userId,
+        userRole: result.userRole,
+        action: 'update',
+        entityType: 'User',
+        entityId: result.userId,
+        reason: 'Password reset completed',
+        severity: 'high',
+      });
 
       res.json({
         message: 'Password reset successfully',
@@ -505,8 +532,20 @@ async function initializeApp() {
     rbacMiddleware(['company']),
     wrap(async (req, res) => {
       const company = await findCompanyForUser(models, req.user.id);
+      const before = toPlain(company);
       const updateData = normalizeCompanyProfilePayload(req.body);
       await company.update(updateData);
+
+      const auditService = new AuditService(models);
+      await auditService.logDataChange(
+        req.user.id,
+        'Company',
+        company.id,
+        before,
+        toPlain(company),
+        'Company profile updated',
+        getAuditContext(req)
+      );
 
       res.json({
         message: 'Company profile updated successfully',
@@ -551,6 +590,18 @@ async function initializeApp() {
         company_id: company.id,
       });
 
+      const auditService = new AuditService(models);
+      await auditService.log({
+        ...getAuditContext(req),
+        userId: req.user.id,
+        action: 'create',
+        entityType: 'OjtPosting',
+        entityId: posting.id,
+        newValues: toPlain(posting),
+        reason: 'OJT posting created',
+        severity: 'medium',
+      });
+
       res.status(201).json({
         message: 'Posting created successfully',
         posting: formatPosting(posting),
@@ -574,8 +625,20 @@ async function initializeApp() {
         throw new AppError('Posting not found', 404);
       }
 
+      const before = toPlain(posting);
       const updateData = normalizePostingPayload(req.body, company);
       await posting.update(updateData);
+
+      const auditService = new AuditService(models);
+      await auditService.logDataChange(
+        req.user.id,
+        'OjtPosting',
+        posting.id,
+        before,
+        toPlain(posting),
+        'OJT posting status updated',
+        getAuditContext(req)
+      );
 
       res.json({
         message: 'Posting status updated successfully',
@@ -684,7 +747,19 @@ async function initializeApp() {
         updateData.hired_at = new Date();
       }
 
+      const before = toPlain(application);
       await application.update(updateData);
+
+      const auditService = new AuditService(models);
+      await auditService.logDataChange(
+        req.user.id,
+        'Application',
+        application.id,
+        before,
+        toPlain(application),
+        `Application status changed to ${nextStatus}`,
+        getAuditContext(req)
+      );
 
       res.json({
         message: 'Application status updated successfully',
@@ -729,7 +804,7 @@ async function initializeApp() {
     '/api/coordinator/programs',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const program = await coordinatorService.createProgram(req.user, req.body);
 
       res.status(201).json({
@@ -757,7 +832,7 @@ async function initializeApp() {
     '/api/coordinator/programs/:id',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const program = await coordinatorService.updateProgram(req.params.id, req.user, req.body);
 
       res.json({
@@ -786,7 +861,7 @@ async function initializeApp() {
     '/api/coordinator/programs/:id/students',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const students = await coordinatorService.addProgramStudents(req.params.id, req.user, req.body);
 
       res.status(201).json({
@@ -801,7 +876,7 @@ async function initializeApp() {
     '/api/coordinator/programs/:id/students/:studentId/status',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const student = await coordinatorService.updateProgramStudentStatus(
         req.params.id,
         req.params.studentId,
@@ -835,7 +910,7 @@ async function initializeApp() {
     '/api/coordinator/programs/:id/companies',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const companies = await coordinatorService.addProgramCompanies(req.params.id, req.user, req.body);
 
       res.status(201).json({
@@ -865,7 +940,7 @@ async function initializeApp() {
     '/api/coordinator/programs/:id/postings',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const postings = await coordinatorService.addProgramPostings(req.params.id, req.user, req.body);
 
       res.status(201).json({
@@ -909,7 +984,7 @@ async function initializeApp() {
     '/api/coordinator/companies/:id/accreditation',
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
-      const coordinatorService = new CoordinatorService(models);
+      const coordinatorService = new CoordinatorService(models, getAuditContext(req));
       const company = await coordinatorService.updateCompanyAccreditation(req.params.id, req.user, req.body);
 
       res.json({
@@ -939,12 +1014,13 @@ async function initializeApp() {
     rbacMiddleware(['coordinator', 'admin']),
     wrap(async (req, res) => {
       const coordinatorService = new CoordinatorService(models);
-      const logs = await coordinatorService.getAuditLogs(req.user, req.query);
+      const result = await coordinatorService.getAuditLogs(req.user, req.query);
 
       res.json({
         message: 'Audit logs retrieved',
-        data: logs,
-        count: logs.length,
+        data: result.data,
+        count: result.pagination.total,
+        pagination: result.pagination,
       });
     })
   );
@@ -994,6 +1070,7 @@ async function initializeApp() {
     handleValidationErrors,
     wrap(async (req, res) => {
       const studentService = new StudentService(models);
+      const before = toPlain(await studentService.getProfile(req.user.id));
       const updated = await studentService.updateProfile(req.user.id, req.body);
 
       // Audit log
@@ -1002,9 +1079,10 @@ async function initializeApp() {
         req.user.id,
         'Student',
         updated.id,
-        null,
-        req.body,
-        'Profile updated by student'
+        before,
+        updated,
+        'Profile updated by student',
+        getAuditContext(req)
       );
 
       res.json({
@@ -1036,6 +1114,18 @@ async function initializeApp() {
     wrap(async (req, res) => {
       const studentService = new StudentService(models);
       const skill = await studentService.addSkill(req.user.id, req.body);
+
+      const auditService = new AuditService(models);
+      await auditService.log({
+        ...getAuditContext(req),
+        userId: req.user.id,
+        action: 'create',
+        entityType: 'StudentSkill',
+        entityId: skill.id,
+        newValues: toPlain(skill),
+        reason: 'Student skill added',
+        severity: 'low',
+      });
 
       res.status(201).json({
         message: 'Skill added successfully',
@@ -1082,6 +1172,18 @@ async function initializeApp() {
       const posting = await models.OjtPosting.findByPk(req.body.posting_id);
       const notificationService = new NotificationService(models);
       await notificationService.notifyApplicationSubmitted(req.user.id, application.id, posting.title);
+
+      const auditService = new AuditService(models);
+      await auditService.log({
+        ...getAuditContext(req),
+        userId: req.user.id,
+        action: 'create',
+        entityType: 'Application',
+        entityId: application.id,
+        newValues: toPlain(application),
+        reason: `Application submitted for ${posting.title}`,
+        severity: 'medium',
+      });
 
       res.status(201).json({
         message: 'Application submitted successfully',
@@ -1145,15 +1247,13 @@ async function initializeApp() {
     rbacMiddleware(['admin']),
     wrap(async (req, res) => {
       const auditService = new AuditService(models);
-      const logs = await models.AuditLog.findAll({
-        order: [['createdAt', 'DESC']],
-        limit: req.query.limit || 50,
-      });
+      const result = await auditService.getAuditLogs(req.query);
 
       res.json({
         message: 'Audit logs retrieved',
-        data: logs,
-        count: logs.length,
+        data: result.data,
+        count: result.pagination.total,
+        pagination: result.pagination,
       });
     })
   );

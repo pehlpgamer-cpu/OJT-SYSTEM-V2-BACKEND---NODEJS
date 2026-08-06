@@ -64,7 +64,8 @@ describe('CoordinatorService', () => {
       5,
       expect.any(Object),
       expect.any(Object),
-      'Company accreditation approved'
+      'Company accreditation approved',
+      { userRole: 'coordinator' }
     );
   });
 

@@ -378,6 +378,8 @@ export class AuthService {
 
         return {
           message: 'Password reset successfully',
+          userId: user.id,
+          userRole: user.role,
         };
       });
     } catch (error) {

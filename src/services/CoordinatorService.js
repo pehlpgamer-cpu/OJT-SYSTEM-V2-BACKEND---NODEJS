@@ -40,8 +40,9 @@ function csvEscape(value) {
 }
 
 export class CoordinatorService {
-  constructor(models) {
+  constructor(models, auditContext = {}) {
     this.models = models;
+    this.auditContext = auditContext;
     this.auditService = new AuditService(models);
     this.notificationService = new NotificationService(models);
   }
@@ -163,6 +164,7 @@ export class CoordinatorService {
     const program = await this.models.OjtProgram.create(data);
 
     await this.auditService.log({
+      ...this.auditContext,
       userId: user.id,
       userRole: user.role,
       action: 'create',
@@ -201,7 +203,8 @@ export class CoordinatorService {
       program.id,
       before,
       toPlain(program),
-      'OJT program updated'
+      'OJT program updated',
+      { ...this.auditContext, userRole: user.role }
     );
 
     return program;
@@ -282,6 +285,7 @@ export class CoordinatorService {
     }
 
     await this.auditService.log({
+      ...this.auditContext,
       userId: user.id,
       userRole: user.role,
       action: 'update',
@@ -334,7 +338,8 @@ export class CoordinatorService {
       row.id,
       before,
       toPlain(row),
-      'Program student status updated'
+      'Program student status updated',
+      { ...this.auditContext, userRole: user.role }
     );
 
     return row;
@@ -391,6 +396,7 @@ export class CoordinatorService {
     }
 
     await this.auditService.log({
+      ...this.auditContext,
       userId: user.id,
       userRole: user.role,
       action: 'update',
@@ -441,6 +447,7 @@ export class CoordinatorService {
     }
 
     await this.auditService.log({
+      ...this.auditContext,
       userId: user.id,
       userRole: user.role,
       action: 'update',
@@ -533,7 +540,8 @@ export class CoordinatorService {
       company.id,
       before,
       toPlain(company),
-      `Company accreditation ${status}`
+      `Company accreditation ${status}`,
+      { ...this.auditContext, userRole: user.role }
     );
 
     return company;
@@ -588,7 +596,7 @@ export class CoordinatorService {
     const programs = await this.listPrograms(user);
     const activePrograms = programs.filter((program) => program.status === 'active');
     const pendingCompanies = await this.listCompanies({ status: 'pending' });
-    const recentAuditLogs = await this.getAuditLogs(user, { limit: 8 });
+    const recentAuditResult = await this.getAuditLogs(user, { limit: 8 });
     const metrics = programs[0]
       ? await this.getProgramMetrics(programs[0].id, user)
       : {
@@ -605,20 +613,12 @@ export class CoordinatorService {
       metrics,
       programs: activePrograms,
       pending_companies: pendingCompanies.slice(0, 8),
-      recent_audit_logs: recentAuditLogs,
+      recent_audit_logs: recentAuditResult.data,
     };
   }
 
   async getAuditLogs(user, filters = {}) {
-    const where = {};
-    if (filters.action) where.action = filters.action;
-    if (filters.entity_type) where.entity_type = filters.entity_type;
-
-    return await this.models.AuditLog.findAll({
-      where,
-      order: [['createdAt', 'DESC']],
-      limit: Number.parseInt(filters.limit, 10) || 50,
-    });
+    return await this.auditService.getAuditLogs(filters);
   }
 
   async generatePlacementReport(user, filters = {}) {

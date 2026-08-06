@@ -10,6 +10,65 @@
 import { Op } from 'sequelize';
 import { Logger } from '../utils/errorHandler.js';
 
+const AUDIT_PAGE_SIZE_DEFAULT = 25;
+const AUDIT_PAGE_SIZE_MAX = 100;
+const SENSITIVE_AUDIT_KEY = /(password|token|secret|authorization|cookie)/i;
+
+function toPositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sanitizeAuditValue(value, seen = new WeakSet()) {
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  const source = value.toJSON ? value.toJSON() : value;
+  if (source !== value) {
+    return sanitizeAuditValue(source, seen);
+  }
+
+  if (seen.has(value)) {
+    return '[Circular]';
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeAuditValue(item, seen));
+  }
+
+  return Object.entries(value).reduce((result, [key, item]) => {
+    result[key] = SENSITIVE_AUDIT_KEY.test(key)
+      ? '[REDACTED]'
+      : sanitizeAuditValue(item, seen);
+    return result;
+  }, {});
+}
+
+function serializeAuditLog(record) {
+  const data = record?.toJSON ? record.toJSON() : { ...record };
+  const user = data.User || data.user || null;
+  delete data.User;
+  delete data.user;
+
+  return {
+    ...data,
+    actor: user
+      ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        }
+      : null,
+  };
+}
+
 export class NotificationService {
   constructor(models) {
     this.models = models;
@@ -355,8 +414,8 @@ export class AuditService {
         entity_type: entityType,
         entity_id: entityId,
         action,
-        old_values: oldValues,
-        new_values: newValues,
+        old_values: sanitizeAuditValue(oldValues),
+        new_values: sanitizeAuditValue(newValues),
         ip_address: ipAddress,
         user_agent: userAgent,
         reason: resolvedReason,
@@ -385,9 +444,10 @@ export class AuditService {
   /**
    * Log user login
    */
-  async logLogin(userId, ipAddress, userAgent) {
+  async logLogin(userId, ipAddress, userAgent, userRole = null) {
     return await this.log({
       userId,
+      userRole,
       action: 'login',
       entityType: 'User',
       entityId: userId,
@@ -400,13 +460,15 @@ export class AuditService {
   /**
    * Log user logout
    */
-  async logLogout(userId, ipAddress) {
+  async logLogout(userId, ipAddress, userAgent = null, userRole = null) {
     return await this.log({
       userId,
+      userRole,
       action: 'logout',
       entityType: 'User',
       entityId: userId,
       ipAddress,
+      userAgent,
       severity: 'medium',
     });
   }
@@ -414,16 +476,21 @@ export class AuditService {
   /**
    * Log data change
    */
-  async logDataChange(userId, entityType, entityId, oldValues, newValues, reason) {
+  async logDataChange(userId, entityType, entityId, oldValues, newValues, reason, context = {}) {
     return await this.log({
       userId,
+      userRole: context.userRole,
       action: 'update',
       entityType,
       entityId,
       oldValues,
       newValues,
       reason,
-      severity: 'medium',
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      severity: context.severity || 'medium',
+      status: context.status || 'success',
+      errorMessage: context.errorMessage || null,
     });
   }
 
@@ -475,6 +542,111 @@ export class AuditService {
       order: [['createdAt', 'DESC']],
       limit,
     });
+  }
+
+  /**
+   * Search and filter the complete audit trail.
+   */
+  async getAuditLogs(filters = {}) {
+    const page = toPositiveInteger(filters.page, 1);
+    const limit = Math.min(
+      toPositiveInteger(filters.limit || filters.page_size, AUDIT_PAGE_SIZE_DEFAULT),
+      AUDIT_PAGE_SIZE_MAX
+    );
+    const offset = (page - 1) * limit;
+    const where = {};
+
+    if (filters.action) where.action = String(filters.action).trim().toLowerCase();
+    if (filters.severity) where.severity = String(filters.severity).trim().toLowerCase();
+    if (filters.status) where.status = String(filters.status).trim().toLowerCase();
+    if (filters.user_role || filters.role) {
+      where.user_role = String(filters.user_role || filters.role).trim().toLowerCase();
+    }
+    if (filters.entity_type) {
+      where.entity_type = { [Op.iLike]: String(filters.entity_type).trim() };
+    }
+
+    const userId = Number.parseInt(filters.user_id, 10);
+    if (Number.isInteger(userId) && userId > 0) where.user_id = userId;
+
+    const entityId = Number.parseInt(filters.entity_id, 10);
+    if (Number.isInteger(entityId) && entityId > 0) where.entity_id = entityId;
+
+    const startDate = filters.start_date || filters.startDate;
+    const endDate = filters.end_date || filters.endDate;
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+    if (parsedStartDate && !Number.isNaN(parsedStartDate.getTime())) {
+      where.createdAt = { ...(where.createdAt || {}), [Op.gte]: parsedStartDate };
+    }
+    if (parsedEndDate && !Number.isNaN(parsedEndDate.getTime())) {
+      where.createdAt = { ...(where.createdAt || {}), [Op.lte]: parsedEndDate };
+    }
+
+    const include = this.models.User
+      ? [{
+          model: this.models.User,
+          attributes: ['id', 'name', 'email', 'role'],
+          required: false,
+        }]
+      : [];
+
+    const search = String(filters.search || '').trim();
+    if (search) {
+      const textMatch = { [Op.iLike]: `%${search}%` };
+      const searchConditions = [
+        { entity_type: textMatch },
+        { reason: textMatch },
+        { ip_address: textMatch },
+        { error_message: textMatch },
+        { user_role: textMatch },
+      ];
+
+      const numericSearch = Number.parseInt(search, 10);
+      if (String(numericSearch) === search && numericSearch > 0) {
+        searchConditions.push(
+          { id: numericSearch },
+          { user_id: numericSearch },
+          { entity_id: numericSearch }
+        );
+      }
+
+      if (include.length > 0) {
+        searchConditions.push(
+          { '$User.name$': textMatch },
+          { '$User.email$': textMatch }
+        );
+      }
+
+      where[Op.or] = searchConditions;
+    }
+
+    const { count, rows } = await this.models.AuditLog.findAndCountAll({
+      where,
+      include,
+      order: [['createdAt', 'DESC'], ['id', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
+      subQuery: false,
+    });
+
+    const total = typeof count === 'number' ? count : count.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      data: rows.map(serializeAuditLog),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+        from: total === 0 ? 0 : offset + 1,
+        to: Math.min(offset + rows.length, total),
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 
   /**
