@@ -277,6 +277,42 @@ export class AuditService {
     this.models = models;
   }
 
+  resolveEntityLabel(entityType, entityId, oldValues = null, newValues = null) {
+    const source = newValues || oldValues || {};
+    const directName = source.name
+      || source.company_name
+      || source.title
+      || source.email
+      || source.username
+      || source.full_name;
+
+    if (directName) {
+      return String(directName);
+    }
+
+    if (entityType && entityId !== undefined && entityId !== null) {
+      return `${entityType} #${entityId}`;
+    }
+
+    return 'record';
+  }
+
+  async resolveReason({ userId, action, entityType, entityId, reason, oldValues, newValues }) {
+    if (reason && String(reason).trim()) {
+      return reason;
+    }
+
+    if (action === 'login' || action === 'logout') {
+      const user = this.models.User ? await this.models.User.findByPk(userId) : null;
+      const userLabel = user?.name || user?.email || `user #${userId}`;
+      return action === 'login' ? `${userLabel} logged in` : `${userLabel} logged out`;
+    }
+
+    const entityLabel = this.resolveEntityLabel(entityType, entityId, oldValues, newValues);
+    const verb = action === 'update' ? 'updated' : action;
+    return `${entityType} ${entityLabel} ${verb}`.trim();
+  }
+
   /**
    * Log an action to audit trail
    * 
@@ -302,6 +338,16 @@ export class AuditService {
       errorMessage = null,
     } = data;
 
+    const resolvedReason = await this.resolveReason({
+      userId,
+      action,
+      entityType,
+      entityId,
+      reason,
+      oldValues,
+      newValues,
+    });
+
     try {
       const auditLog = await this.models.AuditLog.create({
         user_id: userId,
@@ -313,7 +359,7 @@ export class AuditService {
         new_values: newValues,
         ip_address: ipAddress,
         user_agent: userAgent,
-        reason,
+        reason: resolvedReason,
         severity,
         status,
         error_message: errorMessage,
@@ -324,7 +370,7 @@ export class AuditService {
         Logger.warn(`AUDIT: ${action} on ${entityType}#${entityId}`, {
           userId,
           severity,
-          reason,
+          reason: resolvedReason,
         });
       }
 
