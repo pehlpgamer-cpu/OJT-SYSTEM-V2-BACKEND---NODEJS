@@ -30,6 +30,5 @@
       "src": "/(.*)",
       "dest": "/api/index.js"
     }
-  ],
-  "public": false
+  ]
 }
