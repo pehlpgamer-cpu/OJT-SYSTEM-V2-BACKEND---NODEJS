@@ -610,6 +610,49 @@ async function initializeApp() {
   );
 
   app.put(
+    '/api/company/postings/:id',
+    rbacMiddleware(['company']),
+    wrap(async (req, res) => {
+      const company = await findCompanyForUser(models, req.user.id);
+      const posting = await models.OjtPosting.findOne({
+        where: {
+          id: req.params.id,
+          company_id: company.id,
+        },
+      });
+
+      if (!posting) {
+        throw new AppError('Posting not found', 404);
+      }
+
+      const before = toPlain(posting);
+      const updateData = normalizePostingPayload(req.body, company);
+
+      if (updateData.posting_status === 'active' && !company.is_approved_for_posting) {
+        throw new AppError('Company accreditation is required before publishing postings', 403);
+      }
+
+      await posting.update(updateData);
+
+      const auditService = new AuditService(models);
+      await auditService.logDataChange(
+        req.user.id,
+        'OjtPosting',
+        posting.id,
+        before,
+        toPlain(posting),
+        'OJT posting updated',
+        getAuditContext(req)
+      );
+
+      res.json({
+        message: 'Posting updated successfully',
+        posting: formatPosting(posting),
+      });
+    })
+  );
+
+  app.put(
     '/api/company/postings/:id/status',
     rbacMiddleware(['company']),
     wrap(async (req, res) => {
